@@ -1,0 +1,52 @@
+# ビルド成果物・キャッシュ
+.build/
+build/
+.swiftpm/
+DerivedData/
+*.xcodeproj/xcuserdata/
+*.dSYM/
+
+# scripts/fetch-lame.sh が取得・展開する LAME のソース（公式配布物から毎回取得する）
+ThirdParty/LAME/Sources/
+ThirdParty/LAME/.build/
+
+# macOS のメタデータ
+.DS_Store
+._*
+
+# Whisper モデル（数百 MB〜数 GB。アプリが利用者の操作でダウンロードする）
+*.bin
+*.gguf
+*.mlmodelc/
+*.mlpackage/
+
+# 音声・動画・文字起こし結果（利用者のデータやテスト素材を公開しないため）
+# テスト素材は scripts/make-test-audio.sh で生成する
+*.wav
+*.mp3
+*.m4a
+*.aac
+*.aif
+*.aiff
+*.caf
+*.flac
+*.ogg
+*.opus
+*.webm
+*.mp4
+*.mov
+*.m4v
+*.3gp
+*.mpg
+*.mkv
+*.avi
+*.srt
+*.vtt
+文字起こし_統合_*.txt
+Transcripts_Combined_*.txt
+
+# ログ・一時ファイル・ディスクイメージ
+*.log
+*.tmp
+*.dmg
+*.download
