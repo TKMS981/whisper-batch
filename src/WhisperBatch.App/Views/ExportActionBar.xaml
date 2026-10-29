@@ -1,0 +1,33 @@
+<UserControl x:Class="WhisperBatch.App.Views.ExportActionBar" SizeChanged="OnSizeChanged"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:l="clr-namespace:WhisperBatch.App.Infrastructure">
+    <!-- 下部: 一括処理の結果表示と、書き出し操作（統合保存が主操作） -->
+    <DockPanel>
+        <StackPanel x:Name="Buttons" DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
+            <Button x:Name="ExportEachButton" Click="OnExportEachClick" AutomationProperties.Name="{l:L action.exportEach}" IsEnabled="{Binding Model.HasCompletedItems}" ToolTip="{l:L action.exportEach.help}" Padding="12,6">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="{l:L action.exportEach}" />
+                    <TextBlock Text="&#xE70D;" Style="{StaticResource Icon}" FontSize="10" Margin="8,0,0,0" />
+                </StackPanel>
+                <Button.ContextMenu>
+                    <ContextMenu x:Name="ExportEachMenu" />
+                </Button.ContextMenu>
+            </Button>
+            <Button Command="{Binding CombineCommand}" Style="{DynamicResource AccentButtonStyle}" Padding="16,8" AutomationProperties.Name="{l:L action.combine}" Margin="8,0,0,0" ToolTip="{l:L action.combine.help}">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="&#xF0E3;" Style="{StaticResource ButtonGlyph}" />
+                    <TextBlock Text="{l:L action.combine}" />
+                </StackPanel>
+            </Button>
+        </StackPanel>
+        <!-- 表示の種類（処理中・結果・保存済み・案内）が変わったときだけ、下からフェードで入れ替える -->
+        <DockPanel x:Name="Banner" VerticalAlignment="Center"
+                    l:Motion.FadeKey="{Binding Model.BannerKey}" l:Motion.FadeSlides="True" l:Motion.FadeWhenReduced="True"
+                    AutomationProperties.Name="{Binding Model.BannerAccessibleText}" AutomationProperties.LiveSetting="Polite">
+            <TextBlock x:Name="BannerGlyph" DockPanel.Dock="Left" Text="{Binding Model.BannerGlyph}" Style="{StaticResource Icon}" Margin="0,0,8,0"
+                       Visibility="{Binding Model.BannerGlyph, Converter={StaticResource NotEmpty}}" />
+            <TextBlock x:Name="BannerText" Text="{Binding Model.BannerText}" TextWrapping="Wrap" MaxHeight="60" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+        </DockPanel>
+    </DockPanel>
+</UserControl>

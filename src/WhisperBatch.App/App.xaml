@@ -1,0 +1,135 @@
+<Application x:Class="WhisperBatch.App.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:v="clr-namespace:WhisperBatch.App.Views"
+             xmlns:l="clr-namespace:WhisperBatch.App.Infrastructure"
+             ThemeMode="System"
+             ShutdownMode="OnMainWindowClose">
+    <Application.Resources>
+        <l:BoolToVisibility x:Key="Visible" />
+        <l:BoolToVisibility x:Key="NotVisible" Invert="True" />
+        <l:NotEmptyToVisibility x:Key="NotEmpty" />
+        <l:EqualsToVisibility x:Key="When" />
+        <l:Not x:Key="Not" />
+
+        <!-- 日本語は Yu Gothic UI で表示する（Segoe UI Variable には日本語の字形がないため） -->
+        <FontFamily x:Key="AppFont">Segoe UI Variable Text, Yu Gothic UI, Meiryo UI, Segoe UI</FontFamily>
+        <FontFamily x:Key="IconFont">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
+        <FontFamily x:Key="MonoDigits">Segoe UI Variable Text, Yu Gothic UI</FontFamily>
+
+        <Style x:Key="Icon" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="{StaticResource IconFont}" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <Style x:Key="Caption" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+
+        <Style x:Key="Secondary" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+
+        <Style x:Key="Title" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="20" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+
+        <!-- アイコンと文字を並べたボタンの中身 -->
+        <Style x:Key="ButtonGlyph" TargetType="TextBlock" BasedOn="{StaticResource Icon}">
+            <Setter Property="Margin" Value="0,0,8,0" />
+        </Style>
+
+        <Style x:Key="SmallButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Padding" Value="10,3" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="MinHeight" Value="26" />
+        </Style>
+
+        <!-- 一覧の選択（Windows 11 のナビゲーションと同じく、控えめな背景と左端のアクセントの線） -->
+        <Style x:Key="SubtleListItem" TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+            <Setter Property="Padding" Value="10,6" />
+            <!-- Windows 11 のナビゲーションと同じく、選択は控えめな背景と左端のアクセントの線で示す -->
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="Bd" Background="Transparent" CornerRadius="4" Margin="4,1" Padding="{TemplateBinding Padding}">
+                            <Grid>
+                                <Border x:Name="Pill" Width="3" Height="18" CornerRadius="1.5" HorizontalAlignment="Left" VerticalAlignment="Center"
+                                        Margin="-8,0,0,0" Background="{DynamicResource AccentFillColorDefaultBrush}" Visibility="Collapsed" />
+                                <ContentPresenter />
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                                <Setter TargetName="Pill" Property="Visibility" Value="Visible" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- 結果がない・選択がないときの案内（中央に大きなアイコン、見出し、説明、操作） -->
+        <Style TargetType="v:EmptyStateView">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="v:EmptyStateView">
+                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="460" Margin="24">
+                            <TextBlock Text="{TemplateBinding Glyph}" Style="{StaticResource Icon}" FontSize="40"
+                                       HorizontalAlignment="Center" Margin="0,0,0,14"
+                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                            <TextBlock Text="{TemplateBinding Title}" FontSize="18" FontWeight="SemiBold"
+                                       HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" />
+                            <TextBox Text="{TemplateBinding Message}" IsReadOnly="True" TextWrapping="Wrap" TextAlignment="Center"
+                                     BorderThickness="0" Background="Transparent" Padding="0" Margin="0,8,0,0" Focusable="{TemplateBinding MessageSelectable}"
+                                     Foreground="{DynamicResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center" />
+                            <ContentPresenter Margin="0,16,0,0" HorizontalAlignment="Center" />
+                        </StackPanel>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- 処理中のくるくる回る表示 -->
+        <Style x:Key="Spinner" TargetType="Path">
+            <Setter Property="Width" Value="14" />
+            <Setter Property="Height" Value="14" />
+            <Setter Property="Stretch" Value="Uniform" />
+            <Setter Property="StrokeThickness" Value="2" />
+            <Setter Property="StrokeStartLineCap" Value="Round" />
+            <Setter Property="StrokeEndLineCap" Value="Round" />
+            <Setter Property="Stroke" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+            <Setter Property="Data" Value="M 7,1 A 6,6 0 1 1 1,7" />
+            <Setter Property="RenderTransformOrigin" Value="0.5,0.5" />
+            <Setter Property="RenderTransform">
+                <Setter.Value>
+                    <RotateTransform />
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsVisible" Value="True">
+                    <Trigger.EnterActions>
+                        <BeginStoryboard x:Name="Spin">
+                            <Storyboard>
+                                <DoubleAnimation Storyboard.TargetProperty="(Path.RenderTransform).(RotateTransform.Angle)"
+                                                 From="0" To="360" Duration="0:0:0.9" RepeatBehavior="Forever" />
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </Trigger.EnterActions>
+                    <Trigger.ExitActions>
+                        <StopStoryboard BeginStoryboardName="Spin" />
+                    </Trigger.ExitActions>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Application.Resources>
+</Application>

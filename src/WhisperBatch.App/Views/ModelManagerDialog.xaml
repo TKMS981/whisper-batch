@@ -1,0 +1,67 @@
+<Window x:Class="WhisperBatch.App.Views.ModelManagerDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:l="clr-namespace:WhisperBatch.App.Infrastructure"
+        Title="{l:L models.title}" Width="700" Height="640" MinWidth="560" MinHeight="520"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False" FontFamily="{StaticResource AppFont}">
+    <!-- モデルの一覧・取得・削除・切り替え -->
+    <DockPanel Margin="20">
+        <StackPanel DockPanel.Dock="Top">
+            <TextBlock Text="{l:L models.title}" Style="{StaticResource Title}" />
+            <TextBlock Text="{l:L models.message}" Style="{StaticResource Secondary}" Margin="0,6,0,12" />
+        </StackPanel>
+
+        <Button DockPanel.Dock="Bottom" Content="{l:L common.close}" IsCancel="True" IsDefault="True" MinWidth="96" HorizontalAlignment="Right" Margin="0,12,0,0" />
+
+        <StackPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
+            <Border x:Name="ErrorBox" Visibility="Collapsed" Margin="0,0,0,8" Padding="8" CornerRadius="6" Background="{DynamicResource SystemFillColorCriticalBackgroundBrush}">
+                <TextBlock x:Name="ErrorText" TextWrapping="Wrap" Foreground="{DynamicResource SystemFillColorCriticalBrush}" />
+            </Border>
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Left" Text="{l:L models.storage}" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="0,0,6,0" />
+                <Button DockPanel.Dock="Right" Content="{l:L queue.menu.reveal}" Click="OnReveal" Style="{StaticResource SmallButton}" Margin="8,0,0,0" />
+                <TextBox x:Name="StoragePath" IsReadOnly="True" BorderThickness="0" Background="Transparent" Padding="0" FontSize="12" VerticalAlignment="Center" />
+            </DockPanel>
+            <TextBlock Text="{l:L models.source}" Style="{StaticResource Caption}" Margin="0,6,0,0" />
+        </StackPanel>
+
+        <ScrollViewer VerticalScrollBarVisibility="Auto" AutomationProperties.Name="{l:L models.list.accessibility}">
+            <ItemsControl x:Name="ModelList" Focusable="False">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Padding="12,10" Margin="0,0,0,6" CornerRadius="6" BorderThickness="1"
+                                Background="{DynamicResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                                AutomationProperties.Name="{Binding AccessibleName}">
+                            <DockPanel>
+                                <TextBlock DockPanel.Dock="Left" Text="{Binding SelectedGlyph}" Style="{StaticResource Icon}" FontSize="16" Margin="0,0,12,0"
+                                           Foreground="{Binding SelectedBrush}" />
+                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,0,0">
+                                    <Button Content="{Binding ActionLabel}" Click="OnAction" Style="{StaticResource SmallButton}" Margin="0,0,6,0"
+                                            Visibility="{Binding ActionLabel, Converter={StaticResource NotEmpty}}" IsEnabled="{Binding ActionEnabled}" />
+                                    <Button Content="{Binding UseLabel}" Click="OnUse" Style="{StaticResource SmallButton}" IsEnabled="{Binding CanUse}" />
+                                </StackPanel>
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                                        <Border Margin="8,0,0,0" Padding="6,1" CornerRadius="8" Background="{DynamicResource AccentFillColorDefaultBrush}"
+                                                Visibility="{Binding IsRecommended, Converter={StaticResource Visible}}" VerticalAlignment="Center">
+                                            <TextBlock Text="{l:L models.recommended}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+                                        </Border>
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding Summary}" Style="{StaticResource Caption}" Margin="0,2,0,0" />
+                                    <TextBlock Text="{Binding Details}" Style="{StaticResource Caption}" Foreground="{DynamicResource TextFillColorTertiaryBrush}" FontSize="11" Margin="0,2,0,0" />
+                                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0" Visibility="{Binding IsDownloading, Converter={StaticResource Visible}}">
+                                        <ProgressBar Value="{Binding Fraction, Mode=OneWay}" Maximum="1" Width="240" VerticalAlignment="Center" />
+                                        <TextBlock Text="{Binding ProgressText}" Style="{StaticResource Caption}" FontFamily="{StaticResource MonoDigits}" Margin="8,0,0,0" TextWrapping="NoWrap" />
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding StateText}" Foreground="{Binding StateBrush}" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0"
+                                               Visibility="{Binding IsDownloading, Converter={StaticResource NotVisible}}" />
+                                </StackPanel>
+                            </DockPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </DockPanel>
+</Window>

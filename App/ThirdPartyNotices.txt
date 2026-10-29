@@ -1,7 +1,7 @@
 Whisper Batch — サードパーティのライセンス表記
 ================================================
 
-■ whisper.cpp / ggml（アプリに同梱: whisper.framework, v1.9.5 / build b5454）
+■ whisper.cpp / ggml（アプリに同梱: whisper.dll, ggml*.dll — v1.9.5 / build b5454 の公式 Windows CUDA 12.4 ビルド）
 https://github.com/ggml-org/whisper.cpp
 
 MIT License
@@ -26,17 +26,126 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
+■ NVIDIA CUDA ランタイム（アプリに同梱: cudart64_12.dll, cublas64_12.dll, cublasLt64_12.dll — CUDA 12.4）
+https://developer.nvidia.com/cuda-toolkit
+whisper.cpp の公式 Windows CUDA ビルドに含まれる再頒布可能なランタイムです。
+NVIDIA Software License Agreement / CUDA Toolkit End User License Agreement（Attachment A に記載の
+再頒布可能ファイル）の条件に従って同梱しています。全文: https://docs.nvidia.com/cuda/eula/
+GPU で処理するには NVIDIA のグラフィックスドライバー（nvcuda.dll）が必要です（アプリには含みません）。
+
+■ NAudio（Media Foundation のラッパー: NAudio.Core.dll, NAudio.Wasapi.dll — 2.2.1）
+https://github.com/naudio/NAudio
+
+MIT License
+
+Copyright (c) 2020 Mark Heath
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+■ NVorbis（Ogg Vorbis のデコーダー: NVorbis.dll — 0.10.5）
+https://github.com/NVorbis/NVorbis
+
+﻿MIT License
+
+Copyright (c) 2020 Andrew Ward
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+■ Concentus（Opus のデコーダー: Concentus.dll — 2.2.2）
+https://github.com/lostromb/concentus
+
+Copyright (c) by various holding parties, including (but not limited to): 
+Skype Limited, Xiph.Org Foundation, CSIRO, Microsoft Corporation,
+Jean-Marc Valin, Gregory Maxwell, Mark Borgerding, Timothy B. Terriberry,
+Logan Stromberg. All rights are reserved by their respective holders.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+* Redistributions of source code must retain the above copyright notice, this
+  list of conditions and the following disclaimer.
+
+* Redistributions in binary form must reproduce the above copyright notice,
+  this list of conditions and the following disclaimer in the documentation
+  and/or other materials provided with the distribution.
+
+* Neither the name of Internet Society, IETF or IETF Trust, nor the
+   names of specific contributors, may be used to endorse or promote
+   products derived from this software without specific prior written
+   permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+■ Concentus.OggFile（Ogg Opus の読み込み: Concentus.Oggfile.dll — 1.0.7）
+https://github.com/lostromb/concentus.oggfile
+
+MIT License
+
+Copyright (c) Logan Stromberg, Andrew Ward
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
 ■ Whisper モデル（アプリには同梱せず、利用者の操作でダウンロード）
 OpenAI Whisper — MIT License — https://github.com/openai/whisper
 ggml 形式への変換版 — MIT License — https://huggingface.co/ggerganov/whisper.cpp
 
-■ LAME（MP3 エンコーダー、アプリに同梱: Contents/Frameworks/libLAME.dylib, LAME 4.0）
-https://lame.sourceforge.io/
-License: GNU Library General Public License version 2 or later (LGPL-2.0-or-later)
-全文: Contents/Resources/LAME-COPYING.txt
-
-LAME は動的ライブラリとして同梱しており、同じ API を持つ別ビルドの libLAME.dylib に差し替えて使うことができます
-（差し替えるとアプリの署名が無効になるため、差し替え後にアプリを再署名してください）。
-LAME のソースコードは上記の公式配布物（lame-4.0.tar.gz）から入手できます。このアプリでの
-ビルド方法（取得スクリプト・設定ヘッダー）はリポジトリの ThirdParty/LAME と scripts/fetch-lame.sh にあります。
-LAME のソースは変更していません。
+■ Windows のコンポーネント
+音声・動画の読み込みとデコード、サンプルレート変換、MP3 エンコードには Windows 標準の
+Media Foundation を使います（アプリには含みません）。

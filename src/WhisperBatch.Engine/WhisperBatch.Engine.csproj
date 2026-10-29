@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- whisper.cpp（CUDA）/ Media Foundation による読み込み・動画の MP3 変換 / モデル取得 -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <RootNamespace>WhisperBatch.Engine</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\WhisperBatch.Core\WhisperBatch.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Media Foundation のラッパー（MIT）。デコード・リサンプル・MP3 エンコードは Windows 標準のコンポーネントが行う -->
+    <PackageReference Include="NAudio.Core" Version="2.2.1" />
+    <PackageReference Include="NAudio.Wasapi" Version="2.2.1" />
+    <!-- Media Foundation が対応していない Ogg（Vorbis / Opus）のデコーダー（どちらも C# のみの実装） -->
+    <PackageReference Include="NVorbis" Version="0.10.5" />
+    <PackageReference Include="Concentus" Version="2.2.2" />
+    <PackageReference Include="Concentus.OggFile" Version="1.0.7" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="WhisperBatch.Engine.Tests" />
+  </ItemGroup>
+</Project>

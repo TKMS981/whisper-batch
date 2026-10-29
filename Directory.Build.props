@@ -1,0 +1,27 @@
+<Project>
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SatelliteResourceLanguages>en;ja</SatelliteResourceLanguages>
+    <!-- 数百 MB の CUDA DLL をビルドのたびに複製しない -->
+    <CreateHardLinksForCopyFilesToOutputDirectoryIfPossible>true</CreateHardLinksForCopyFilesToOutputDirectoryIfPossible>
+    <CreateHardLinksForCopyLocalIfPossible>true</CreateHardLinksForCopyLocalIfPossible>
+    <Version>1.0.0</Version>
+    <Company>TKMS981</Company>
+    <Product>Whisper Batch</Product>
+    <Copyright>Copyright (c) 2026 TKMS981 — MIT License</Copyright>
+    <!-- ビルドしたマシンのパスを PDB や例外のスタックトレースに残さない -->
+    <PathMap>$(MSBuildThisFileDirectory)=.\</PathMap>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <RepoRoot>$(MSBuildThisFileDirectory)</RepoRoot>
+    <NativeDir>$(RepoRoot)native\win-x64\</NativeDir>
+  </PropertyGroup>
+</Project>

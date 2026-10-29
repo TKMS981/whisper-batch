@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- UI に依存しないロジック（キュー、状態遷移、重複判定、出力フォーマット、チャンク分割、表示文字列） -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <RootNamespace>WhisperBatch.Core</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="WhisperBatch.Core.Tests" />
+  </ItemGroup>
+</Project>

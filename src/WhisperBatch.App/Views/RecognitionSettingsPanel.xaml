@@ -1,0 +1,110 @@
+<UserControl x:Class="WhisperBatch.App.Views.RecognitionSettingsPanel" SizeChanged="OnSizeChanged"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:l="clr-namespace:WhisperBatch.App.Infrastructure">
+    <!-- 右上: モデルと言語の設定、開始・キャンセル -->
+    <StackPanel>
+        <!-- 幅が狭いときはモデルを 1 行目いっぱいに、言語と開始ボタンを 2 行目に並べる（コードビハインドで切り替え） -->
+        <Grid x:Name="PickerGrid">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="20*" MaxWidth="600" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <StackPanel x:Name="ModelBox" Grid.Column="0" Margin="0,0,16,0">
+                <TextBlock Text="{l:L settings.model}" Style="{StaticResource Caption}" Margin="0,0,0,4" />
+                <ComboBox ItemsSource="{Binding Model.ModelChoices}" DisplayMemberPath="Label" SelectedValuePath="Value" HorizontalAlignment="Stretch"
+                          SelectedValue="{Binding Model.SelectedModelId}" IsEnabled="{Binding Model.IsRunning, Converter={StaticResource Not}}"
+                          AutomationProperties.Name="{l:L settings.model.accessibility}" />
+            </StackPanel>
+            <StackPanel x:Name="LanguageBox" Grid.Column="1" Width="180">
+                <TextBlock Text="{l:L settings.language}" Style="{StaticResource Caption}" Margin="0,0,0,4" />
+                <ComboBox ItemsSource="{Binding Model.LanguageChoices}" DisplayMemberPath="Label" SelectedValuePath="Value" HorizontalAlignment="Stretch"
+                          SelectedValue="{Binding Model.Language}" IsEnabled="{Binding Model.IsRunning, Converter={StaticResource Not}}"
+                          AutomationProperties.Name="{l:L settings.language.accessibility}" />
+            </StackPanel>
+            <Grid x:Name="RunBox" Grid.Column="3" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="16,0,0,0">
+                <Button Command="{Binding StartCommand}" Style="{DynamicResource AccentButtonStyle}" Padding="16,7" AutomationProperties.Name="{l:L action.start}" ToolTip="{Binding Model.StartHelp}"
+                        Visibility="{Binding Model.IsRunning, Converter={StaticResource NotVisible}}">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE768;" Style="{StaticResource ButtonGlyph}" />
+                        <TextBlock Text="{l:L action.start}" />
+                    </StackPanel>
+                </Button>
+                <Button Command="{Binding CancelCommand}" Padding="16,7" AutomationProperties.Name="{l:L action.cancel}" Visibility="{Binding Model.IsRunning, Converter={StaticResource Visible}}">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE71A;" Style="{StaticResource ButtonGlyph}" />
+                        <TextBlock Text="{l:L action.cancel}" />
+                    </StackPanel>
+                </Button>
+            </Grid>
+        </Grid>
+
+        <!-- 選択中のモデルの取得状況 -->
+        <DockPanel Margin="0,10,0,0" MinHeight="26">
+            <Button DockPanel.Dock="Right" Content="{l:L action.manageModels}" Command="{Binding ManageModelsCommand}" Style="{StaticResource SmallButton}" VerticalAlignment="Center" />
+            <Grid VerticalAlignment="Center">
+                <!-- 取得済み -->
+                <StackPanel Orientation="Horizontal" Visibility="{Binding Model.ModelStatusKind, Converter={StaticResource When}, ConverterParameter=installed}">
+                    <TextBlock Text="&#xEC61;" Style="{StaticResource Icon}" Foreground="{DynamicResource SystemFillColorSuccessBrush}" Margin="0,0,6,0" />
+                    <TextBlock Text="{l:L model.state.installed}" Foreground="{DynamicResource SystemFillColorSuccessBrush}" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding Model.SelectedModel.Summary}" Style="{StaticResource Caption}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                               VerticalAlignment="Center" Margin="10,0,0,0" MaxWidth="360" />
+                </StackPanel>
+                <!-- 読み込み中 -->
+                <StackPanel Orientation="Horizontal" Visibility="{Binding Model.ModelStatusKind, Converter={StaticResource When}, ConverterParameter=loading}">
+                    <Path Style="{StaticResource Spinner}" Margin="0,0,8,0" />
+                    <TextBlock Text="{l:L model.loading}" VerticalAlignment="Center" />
+                </StackPanel>
+                <!-- 未取得 -->
+                <StackPanel Orientation="Horizontal" Visibility="{Binding Model.ModelStatusKind, Converter={StaticResource When}, ConverterParameter=notInstalled}">
+                    <TextBlock Text="&#xE896;" Style="{StaticResource Icon}" Foreground="{DynamicResource SystemFillColorCautionBrush}" Margin="0,0,6,0" />
+                    <TextBlock Text="{l:L model.state.notInstalled}" Foreground="{DynamicResource SystemFillColorCautionBrush}" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding Model.ModelSizeAndSpace}" Style="{StaticResource Caption}" TextWrapping="NoWrap" VerticalAlignment="Center" Margin="10,0,10,0" />
+                    <Button Content="{l:L model.download}" Click="OnDownloadClick" Style="{StaticResource SmallButton}" />
+                </StackPanel>
+                <!-- ダウンロード中 -->
+                <StackPanel Orientation="Horizontal" Visibility="{Binding Model.ModelStatusKind, Converter={StaticResource When}, ConverterParameter=downloading}">
+                    <ProgressBar Value="{Binding Model.DownloadFraction, Mode=OneWay}" Maximum="1" Width="200" VerticalAlignment="Center"
+                                 AutomationProperties.Name="{l:L model.downloading.accessibility}" AutomationProperties.HelpText="{Binding Model.DownloadPercentText}" />
+                    <TextBlock Text="{Binding Model.DownloadText}" Style="{StaticResource Caption}" FontFamily="{StaticResource MonoDigits}" VerticalAlignment="Center" Margin="10,0,10,0" />
+                    <Button Content="{l:L model.stop}" Click="OnStopDownloadClick" Style="{StaticResource SmallButton}" />
+                </StackPanel>
+                <!-- 検証中 -->
+                <StackPanel Orientation="Horizontal" Visibility="{Binding Model.ModelStatusKind, Converter={StaticResource When}, ConverterParameter=verifying}">
+                    <Path Style="{StaticResource Spinner}" Margin="0,0,8,0" />
+                    <TextBlock Text="{l:L model.verifying}" VerticalAlignment="Center" />
+                </StackPanel>
+                <!-- 失敗 -->
+                <DockPanel Visibility="{Binding Model.ModelStatusKind, Converter={StaticResource When}, ConverterParameter=failed}">
+                    <TextBlock DockPanel.Dock="Left" Text="&#xE7BA;" Style="{StaticResource Icon}" Foreground="{DynamicResource SystemFillColorCriticalBrush}" Margin="0,0,6,0" />
+                    <Button DockPanel.Dock="Right" Content="{Binding Model.ModelRetryLabel}" Click="OnRetryDownloadClick" Style="{StaticResource SmallButton}" Margin="10,0,0,0" />
+                    <TextBlock Text="{Binding Model.ModelFailureMessage}" Foreground="{DynamicResource SystemFillColorCriticalBrush}" TextWrapping="Wrap" MaxHeight="40" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                </DockPanel>
+            </Grid>
+        </DockPanel>
+
+        <!-- 開始できない理由 -->
+        <StackPanel Orientation="Horizontal" Margin="0,8,0,0" Visibility="{Binding Model.VisibleBlockReason, Converter={StaticResource NotEmpty}}">
+            <TextBlock Text="&#xE946;" Style="{StaticResource Icon}" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,0,6,0" VerticalAlignment="Top" />
+            <TextBlock Text="{Binding Model.VisibleBlockReason}" Style="{StaticResource Caption}" MaxWidth="640" />
+        </StackPanel>
+
+        <!-- プライバシーと処理装置 -->
+        <DockPanel Margin="0,8,0,0">
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Margin="12,0,0,0" Visibility="{Binding Model.DeviceLine, Converter={StaticResource NotEmpty}}">
+                <TextBlock Text="&#xE950;" Style="{StaticResource Icon}" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,0,6,0" />
+                <TextBlock Text="{Binding Model.DeviceLine}" Style="{StaticResource Caption}" TextWrapping="NoWrap" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="&#xE72E;" Style="{StaticResource Icon}" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,0,6,0" VerticalAlignment="Top" />
+                <TextBlock Text="{l:L settings.privacy}" Style="{StaticResource Caption}" TextTrimming="CharacterEllipsis" MaxHeight="34" />
+            </StackPanel>
+        </DockPanel>
+    </StackPanel>
+</UserControl>

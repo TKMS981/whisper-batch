@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- WPF アプリ本体（Windows 11 の Fluent テーマ） -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>WhisperBatch</AssemblyName>
+    <RootNamespace>WhisperBatch.App</RootNamespace>
+    <ApplicationIcon>..\..\App\AppIcon.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AssemblyTitle>Whisper Batch</AssemblyTitle>
+    <!-- ThemeMode（Fluent テーマ）は .NET 10 では試験的 API の扱い -->
+    <NoWarn>$(NoWarn);WPF0001</NoWarn>
+    <SelfContained>false</SelfContained>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\WhisperBatch.Core\WhisperBatch.Core.csproj" />
+    <ProjectReference Include="..\WhisperBatch.Engine\WhisperBatch.Engine.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="..\..\App\AppIcon.ico" Link="AppIcon.ico" />
+    <None Include="..\..\App\ThirdPartyNotices.txt" Link="ThirdPartyNotices.txt" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\LICENSE" Link="LICENSE.txt" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <Import Project="..\Native.targets" />
+</Project>

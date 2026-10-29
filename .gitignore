@@ -1,18 +1,19 @@
 # ビルド成果物・キャッシュ
-.build/
 build/
-.swiftpm/
-DerivedData/
-*.xcodeproj/xcuserdata/
-*.dSYM/
+bin/
+obj/
+.vs/
+*.user
+TestResults/
 
-# scripts/fetch-lame.sh が取得・展開する LAME のソース（公式配布物から毎回取得する）
-ThirdParty/LAME/Sources/
-ThirdParty/LAME/.build/
+# scripts/fetch-whisper.ps1 が取得・展開する whisper.cpp（CUDA 版）の DLL（公式配布物から毎回取得する）
+native/
 
-# macOS のメタデータ
+# OS のメタデータ
 .DS_Store
 ._*
+Thumbs.db
+desktop.ini
 
 # Whisper モデル（数百 MB〜数 GB。アプリが利用者の操作でダウンロードする）
 *.bin

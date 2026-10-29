@@ -1,0 +1,12 @@
+<Project>
+  <!-- whisper.cpp（CUDA 版）の DLL と表示文字列を出力フォルダに置く。DLL は scripts/fetch-whisper.ps1 で取得する。 -->
+  <ItemGroup>
+    <None Include="$(NativeDir)*.dll" Link="%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" Visible="false" />
+    <None Include="$(RepoRoot)Localization\**\*.strings" Link="Localization\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" Visible="false" />
+  </ItemGroup>
+
+  <Target Name="CheckWhisperNative" BeforeTargets="BeforeBuild">
+    <Error Condition="!Exists('$(NativeDir)whisper.dll')"
+           Text="whisper.cpp の DLL がありません。先に ./scripts/fetch-whisper.ps1 を実行してください（$(NativeDir)）。" />
+  </Target>
+</Project>

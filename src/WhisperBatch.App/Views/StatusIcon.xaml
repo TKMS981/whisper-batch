@@ -1,0 +1,15 @@
+<UserControl x:Class="WhisperBatch.App.Views.StatusIcon"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:l="clr-namespace:WhisperBatch.App.Infrastructure"
+             Width="18" Height="18" Focusable="False"
+             AutomationProperties.Name="{Binding StatusLabel}">
+    <!-- アイコンは常に置いておき、完了・失敗時に 1 回弾ませる（処理中は隠してスピナーを重ねる） -->
+    <Grid>
+        <TextBlock x:Name="Glyph" Text="{Binding StatusGlyph}" Style="{StaticResource Icon}" FontSize="15"
+                   HorizontalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                   l:Motion.BounceKey="{Binding BounceKey}"
+                   Visibility="{Binding IsProcessing, Converter={StaticResource NotVisible}}" />
+        <Path Style="{StaticResource Spinner}" Visibility="{Binding IsProcessing, Converter={StaticResource Visible}}" />
+    </Grid>
+</UserControl>

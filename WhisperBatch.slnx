@@ -1,0 +1,17 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/WhisperBatch.App/WhisperBatch.App.csproj">
+      <Platform Project="x64" />
+    </Project>
+    <Project Path="src/WhisperBatch.Core/WhisperBatch.Core.csproj" />
+    <Project Path="src/WhisperBatch.Engine/WhisperBatch.Engine.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/WhisperBatch.Core.Tests/WhisperBatch.Core.Tests.csproj">
+      <Platform Project="x64" />
+    </Project>
+    <Project Path="tests/WhisperBatch.Engine.Tests/WhisperBatch.Engine.Tests.csproj">
+      <Platform Project="x64" />
+    </Project>
+  </Folder>
+</Solution>

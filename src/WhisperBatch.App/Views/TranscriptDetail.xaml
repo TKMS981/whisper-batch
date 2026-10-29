@@ -1,0 +1,148 @@
+<UserControl x:Class="WhisperBatch.App.Views.TranscriptDetail"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:l="clr-namespace:WhisperBatch.App.Infrastructure"
+             xmlns:v="clr-namespace:WhisperBatch.App.Views">
+    <!-- 中央: 選択中のファイルの状態と文字起こし結果 -->
+    <Grid>
+        <!-- キューが空 -->
+        <v:EmptyStateView Glyph="&#xE8D6;" Title="{l:L detail.empty.title}" Message="{l:L detail.empty.message}"
+                          Visibility="{Binding Model.DetailMode, Converter={StaticResource When}, ConverterParameter=empty}" />
+        <!-- 選択なし -->
+        <v:EmptyStateView Glyph="&#xE8A0;" Title="{l:L detail.noSelection.title}" Message="{l:L detail.noSelection.message}"
+                          Visibility="{Binding Model.DetailMode, Converter={StaticResource When}, ConverterParameter=none}" />
+        <!-- 複数選択 -->
+        <v:EmptyStateView Glyph="&#xE8FD;" Title="{Binding Model.MultiTitle}" Message="{Binding Model.MultiMessage}"
+                          Visibility="{Binding Model.DetailMode, Converter={StaticResource When}, ConverterParameter=multi}">
+            <StackPanel Orientation="Horizontal">
+                <Button Content="{l:L action.combine}" Command="{Binding CombineCommand}" Margin="0,0,8,0" />
+                <Button Content="{l:L action.retry}" Click="OnRetrySelection" IsEnabled="{Binding Model.SelectionHasRetryable}" Margin="0,0,8,0" />
+                <Button Content="{l:L queue.menu.remove}" Click="OnRemoveSelection" IsEnabled="{Binding Model.CanRemoveSelected}" />
+            </StackPanel>
+        </v:EmptyStateView>
+
+        <!-- 1 件選択 -->
+        <DockPanel Visibility="{Binding Model.DetailMode, Converter={StaticResource When}, ConverterParameter=single}">
+            <Border DockPanel.Dock="Top" Padding="16,10" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}">
+                <StackPanel>
+                    <DockPanel>
+                        <v:StatusIcon DockPanel.Dock="Left" DataContext="{Binding Model.SingleSelected}" Margin="0,0,10,0" VerticalAlignment="Center" />
+                        <StackPanel>
+                            <TextBox Text="{Binding Model.SingleSelected.DisplayName, Mode=OneWay}" IsReadOnly="True" FontWeight="SemiBold" FontSize="15"
+                                     BorderThickness="0" Background="Transparent" Padding="0" />
+                            <TextBlock Text="{Binding Model.SingleSelected.DetailLine}" Style="{StaticResource Caption}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                    </DockPanel>
+
+                    <!-- 動画の音声を MP3 として保存する操作（利用者が選んだときだけ、選んだ場所に保存する） -->
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0" Visibility="{Binding Model.SingleSelected.IsVideo, Converter={StaticResource Visible}}">
+                        <Button Click="OnSaveMp3" Style="{StaticResource SmallButton}" ToolTip="{l:L mp3.save.help}" AutomationProperties.Name="{l:L mp3.save}"
+                                Visibility="{Binding Model.SingleSelected.IsExportingMp3, Converter={StaticResource NotVisible}}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE8D6;" Style="{StaticResource ButtonGlyph}" FontSize="12" />
+                                <TextBlock Text="{l:L mp3.save}" />
+                            </StackPanel>
+                        </Button>
+                        <StackPanel Orientation="Horizontal" Visibility="{Binding Model.SingleSelected.IsExportingMp3, Converter={StaticResource Visible}}">
+                            <ProgressBar Value="{Binding Model.SingleSelected.Mp3Progress, Mode=OneWay}" Maximum="1" Width="180" VerticalAlignment="Center"
+                                         AutomationProperties.Name="{l:L mp3.exporting}" />
+                            <TextBlock Text="{l:L mp3.exporting}" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="10,0,10,0" />
+                            <Button Content="{l:L model.stop}" Click="OnCancelMp3" Style="{StaticResource SmallButton}" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- 完了した結果の操作 -->
+                    <DockPanel Margin="0,8,0,0" Visibility="{Binding Model.SingleSelected.IsCompleted, Converter={StaticResource Visible}}">
+                        <CheckBox DockPanel.Dock="Left" Content="{l:L detail.showTimestamps}" IsChecked="{Binding Model.ShowTimestamps}" VerticalAlignment="Center" />
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                            <Button x:Name="CopyButton" Click="OnCopy" Style="{StaticResource SmallButton}" Margin="0,0,6,0" AutomationProperties.Name="{l:L detail.copy}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock x:Name="CopyGlyph" Text="&#xE8C8;" Style="{StaticResource ButtonGlyph}" FontSize="12" />
+                                    <TextBlock x:Name="CopyText" Text="{l:L detail.copy}" />
+                                </StackPanel>
+                            </Button>
+                            <Button x:Name="ExportButton" Click="OnExportThis" Style="{StaticResource SmallButton}"
+                                    AutomationProperties.Name="{l:L detail.exportThis.accessibility}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xEDE1;" Style="{StaticResource ButtonGlyph}" FontSize="12" />
+                                    <TextBlock Text="{l:L detail.exportThis}" />
+                                    <TextBlock Text="&#xE70D;" Style="{StaticResource Icon}" FontSize="9" Margin="6,0,0,0" />
+                                </StackPanel>
+                                <Button.ContextMenu>
+                                    <ContextMenu x:Name="ExportMenu" />
+                                </Button.ContextMenu>
+                            </Button>
+                        </StackPanel>
+                        <Rectangle />
+                    </DockPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- 状態が変わったとき（処理中 → 完了・失敗など）に結果表示をクロスフェードで切り替える -->
+            <Grid l:Motion.FadeKey="{Binding Model.SingleSelected.StatusKind}" l:Motion.FadeWhenReduced="True">
+                <v:EmptyStateView Glyph="&#xE917;" Title="{Binding Model.SingleSelected.StatusLabel}" Message="{Binding Model.PendingMessage}"
+                                  Visibility="{Binding Model.SingleSelected.StatusKind, Converter={StaticResource When}, ConverterParameter=pending}" />
+
+                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Width="380"
+                            Visibility="{Binding Model.SingleSelected.StatusKind, Converter={StaticResource When}, ConverterParameter=processing}">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Right" Text="{Binding Model.SingleSelected.PercentText}" FontFamily="{StaticResource MonoDigits}" />
+                        <!-- 変換から文字起こしに移るとき、ラベルをクロスフェードで入れ替える -->
+                        <TextBlock Text="{Binding Model.SingleSelected.PhaseText}" l:Motion.FadeKey="{Binding Model.SingleSelected.PhaseText}" />
+                    </DockPanel>
+                    <ProgressBar Value="{Binding Model.SingleSelected.Progress, Mode=OneWay}" Maximum="1" Height="6" Margin="0,8,0,12"
+                                 AutomationProperties.Name="{Binding Model.SingleSelected.PhaseText}" AutomationProperties.HelpText="{Binding Model.SingleSelected.PercentText}" />
+                    <TextBlock Text="{l:L detail.videoSteps}" Style="{StaticResource Caption}" TextAlignment="Center" Margin="0,0,0,12"
+                               Visibility="{Binding Model.SingleSelected.IsVideo, Converter={StaticResource Visible}}" />
+                    <Button Content="{l:L action.cancel}" Command="{Binding CancelCommand}" HorizontalAlignment="Center" />
+                </StackPanel>
+
+                <v:EmptyStateView Glyph="&#xE7BA;" Title="{l:L detail.failed.title}" Message="{Binding Model.SingleSelected.FailureMessage}" MessageSelectable="True"
+                                  Visibility="{Binding Model.SingleSelected.StatusKind, Converter={StaticResource When}, ConverterParameter=failed}">
+                    <Button Content="{l:L action.retry}" Click="OnRetryThis" />
+                </v:EmptyStateView>
+
+                <v:EmptyStateView Glyph="&#xECC9;" Title="{l:L detail.cancelled.title}" Message="{l:L detail.cancelled.message}"
+                                  Visibility="{Binding Model.SingleSelected.StatusKind, Converter={StaticResource When}, ConverterParameter=cancelled}">
+                    <Button Content="{l:L action.retry}" Click="OnRetryThis" />
+                </v:EmptyStateView>
+
+                <v:EmptyStateView Glyph="&#xE74F;" Title="{l:L detail.noSpeech.title}" Message="{l:L detail.noSpeech.message}"
+                                  Visibility="{Binding Model.SingleSelected.StatusKind, Converter={StaticResource When}, ConverterParameter=noSpeech}">
+                    <Button Content="{l:L action.retry}" Click="OnRetryThis" />
+                </v:EmptyStateView>
+
+                <!-- 長い文章でも軽く表示でき、選択・コピー・検索（Ctrl+F）ができる読み取り専用テキスト -->
+                <DockPanel Visibility="{Binding Model.SingleSelected.StatusKind, Converter={StaticResource When}, ConverterParameter=completed}">
+                    <Border x:Name="FindBar" DockPanel.Dock="Top" Visibility="Collapsed" Padding="12,6" BorderThickness="0,0,0,1"
+                            BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}" Background="{DynamicResource LayerFillColorAltBrush}">
+                        <DockPanel>
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                <TextBlock x:Name="FindStatus" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="8,0" />
+                                <Button Click="OnFindPrevious" Padding="8,4" ToolTip="{l:L detail.find.previous}" AutomationProperties.Name="{l:L detail.find.previous}">
+                                    <TextBlock Text="&#xE70E;" Style="{StaticResource Icon}" FontSize="11" />
+                                </Button>
+                                <Button Click="OnFindNext" Padding="8,4" Margin="4,0" ToolTip="{l:L detail.find.next}" AutomationProperties.Name="{l:L detail.find.next}">
+                                    <TextBlock Text="&#xE70D;" Style="{StaticResource Icon}" FontSize="11" />
+                                </Button>
+                                <Button Click="OnFindClose" Padding="8,4" ToolTip="{l:L common.close}" AutomationProperties.Name="{l:L common.close}">
+                                    <TextBlock Text="&#xE711;" Style="{StaticResource Icon}" FontSize="11" />
+                                </Button>
+                            </StackPanel>
+                            <TextBox x:Name="FindBox" KeyDown="OnFindKeyDown" TextChanged="OnFindTextChanged" MaxWidth="320" HorizontalAlignment="Left" MinWidth="220"
+                                     AutomationProperties.Name="{l:L detail.find.placeholder}" />
+                        </DockPanel>
+                    </Border>
+                    <TextBox x:Name="TranscriptBox" Text="{Binding Model.DetailText, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap"
+                             VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AcceptsReturn="True"
+                             BorderThickness="0" Padding="16,12" FontSize="15" Background="Transparent" IsInactiveSelectionHighlightEnabled="True"
+                             AutomationProperties.Name="{l:L detail.text.accessibility}">
+                        <TextBox.Resources>
+                            <Style TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}" />
+                        </TextBox.Resources>
+                    </TextBox>
+                </DockPanel>
+            </Grid>
+        </DockPanel>
+    </Grid>
+</UserControl>
