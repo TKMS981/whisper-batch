@@ -23,6 +23,19 @@ macOS（Apple Silicon）向けの SwiftUI 版を、Windows（x64 + NVIDIA GPU）
 
 処理速度の目安（RTX 4080 SUPER、Large v3 Turbo Q5_0、約 2 分 53 秒の日本語音声）: **GPU で約 4 秒**（CPU だけでは約 98 秒）。
 
+## インストール
+
+[Releases](https://github.com/TKMS981/whisper-batch/releases) から `WhisperBatch-<版>-win-x64-setup.exe` をダウンロードして実行します。
+
+- .NET ランタイムを同梱しているので、別途インストールは不要です。Visual C++ ランタイム（x64）がない PC では、インストール中に自動で入れます（このときだけ管理者の確認が出ます）。
+- 既定では「自分だけ」にインストールします（管理者権限不要、`%LOCALAPPDATA%\Programs\Whisper Batch`）。最初の画面で「すべてのユーザー」も選べます。
+- オプション: デスクトップのショートカット、エクスプローラーの「送る」メニュー、「プログラムから開く」への登録（既定でオン。既定のアプリにはしません）。
+- アンインストールは「設定 > アプリ」から。ダウンロードしたモデルを消すかどうかを確認します（既定は残す）。
+- コード署名をしていないため、初回は SmartScreen の「Windows によって PC が保護されました」が出ることがあります（「詳細情報」→「実行」）。
+- ダウンロードしたファイルは、リリースに添付した `.sha256` の値と照合できます（`Get-FileHash <ファイル>`）。
+
+インストーラーの作成: `./scripts/make-installer.ps1`（Inno Setup 6 が必要。`winget install JRSoftware.InnoSetup`）→ `build\installer\`
+
 ## ビルドと実行
 
 ```powershell
@@ -213,15 +226,14 @@ UTF-8（BOM なし）・LF で、一時ファイル経由で置き換えるた�
 | 読み込み | AVFoundation | Media Foundation ＋ C# のデコーダー |
 | MP3 エンコード | LAME（LGPL、動的ライブラリで同梱） | Windows 標準の MP3 エンコーダー |
 | 読める形式 | MKV・WebM・AVI は不可 | MKV・WebM・AVI・WMV・WMA も可 |
-| ファイルの受け取り | Finder の「このアプリケーションで開く」 | exe へのドロップ・2 つ目の起動から起動中のアプリへ受け渡し |
+| ファイルの受け取り | Finder の「このアプリケーションで開く」 | 「プログラムから開く」「送る」・exe へのドロップ（起動中のアプリへ受け渡し） |
 | フォルダの追加 | ファイル選択と同じダイアログ | 「フォルダを追加…」（Windows のファイル選択ダイアログはファイルとフォルダを同時に選べないため） |
 | サンドボックス | App Sandbox・セキュリティスコープ付きブックマーク | なし（Windows デスクトップアプリの通常の権限） |
 | 区切りでの繰り返し | なし | 隙間なく続く同じ文を取り除く（上記） |
 
 ## 既知の制約・未確認の点
 
-- コード署名をしていないため、初回起動時に SmartScreen の警告が出ることがあります。インストーラーはありません（フォルダごとコピーして使います）。
-- エクスプローラーの「プログラムから開く」への登録はしていません（exe やショートカットへのドロップは使えます）。
+- コード署名をしていないため、初回起動時に SmartScreen の警告が出ることがあります。
 - GPU 処理は NVIDIA（CUDA）のみです。AMD・Intel の GPU では CPU で処理します。
 - 動作確認は Windows 11 Home / RTX 4080 SUPER / ダークモードの 1 台だけです。ライトテーマ、高 DPI の複数モニター、ナレーターでの読み上げは確認していません（UI オートメーションの名前は確認済み）。
 - **ドラッグ＆ドロップ**は実装していますが、自動テストでは確認できていません（操作中の PC でマウスを動かす必要があるため）。ドロップ後の追加処理はファイル選択・exe へのドロップと共通で、そちらは確認済みです。
@@ -244,5 +256,6 @@ src/WhisperBatch.App/              WPF アプリ（Views/ 画面、ViewModels/ �
 src/Native.targets                 whisper.cpp の DLL と表示文字列を出力フォルダに置く
 tests/                             xUnit のテスト
 App/                               アイコン（AppIcon.ico）、サードパーティのライセンス表記
-scripts/                           build.ps1、test.ps1、fetch-whisper.ps1、make-test-audio.ps1、make-icon.ps1
+installer/                         Inno Setup のインストーラー定義（WhisperBatch.iss）
+scripts/                           build.ps1、make-installer.ps1、test.ps1、fetch-whisper.ps1、make-test-audio.ps1、make-icon.ps1
 ```

@@ -6,7 +6,8 @@
 # 必要なもの: .NET 10 SDK（PATH の dotnet、または %LOCALAPPDATA%\Microsoft\dotnet）
 param(
     [switch]$SelfContained,
-    [string]$Configuration = 'Release'
+    [string]$Configuration = 'Release',
+    [string]$OutDir = ''
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
@@ -15,7 +16,7 @@ $root = Split-Path -Parent $PSScriptRoot
 # whisper.cpp（CUDA 版）の DLL を取得・検証する（取得済みなら何もしない）
 & (Join-Path $PSScriptRoot 'fetch-whisper.ps1')
 
-$out = Join-Path $root 'build\WhisperBatch'
+$out = if ($OutDir) { $OutDir } else { Join-Path $root 'build\WhisperBatch' }
 if (Test-Path $out) { Remove-Item -Recurse -Force $out }
 
 Write-Host "==> dotnet publish ($Configuration, win-x64, self-contained=$SelfContained)"
