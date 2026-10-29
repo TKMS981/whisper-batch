@@ -9,6 +9,19 @@
 - 表示言語: 日本語・英語（macOS の優先言語から自動選択、設定で切り替え可）
 - 既定モデル: Large v3 Turbo（量子化 Q5_0、574 MB）／文字起こしの初期言語: 日本語
 
+## インストール
+
+1. [Releases](https://github.com/TKMS981/whisper-batch/releases/latest) から `WhisperBatch-<バージョン>.dmg` をダウンロードします。
+2. DMG を開き、「Whisper Batch」を「Applications」フォルダへドラッグします。
+3. 初回は macOS が「開けません」「検証できません」と表示します（Developer ID 署名と公証をしていないため）。
+   1. ダイアログを「完了」で閉じます。
+   2. 「システム設定」→「プライバシーとセキュリティ」を開き、下の方にある「Whisper Batch」の「このまま開く」を押します。
+   3. もう一度アプリを開き、確認ダイアログで「開く」を押します。
+
+   ターミナルを使う場合は `xattr -dr com.apple.quarantine "/Applications/Whisper Batch.app"` でも開けるようになります。
+
+ダウンロードしたファイルは、リリースに添付した `.sha256` の値と `shasum -a 256 WhisperBatch-<バージョン>.dmg` の結果が一致するかで確認できます。
+
 ## 動作環境と、この環境での制約
 
 | 項目 | 内容 |
@@ -45,6 +58,18 @@ LAME は `scripts/fetch-lame.sh` が取得し、必要なソースとヘッダ�
 生成物の `build/Whisper Batch.app` には、`whisper.framework` と `libLAME.dylib`（どちらも arm64）、日本語・英語の文字列、ライセンス表記が入ります。
 
 ビルドスクリプトは署名の前に、実行ファイルと `libLAME.dylib` からデバッグ用の参照情報を取り除きます（`strip -S -x`）。この情報にはソースやオブジェクトファイルの絶対パス（ビルドした Mac のユーザー名を含む）が入るためです。クラッシュ時のシンボル解決に使う dSYM は `.build/` にだけ残り、アプリには含めません。`.build/` の中身はローカルパスを含むので公開・配布しないでください。
+
+### 配布用 DMG の作成
+
+```sh
+./scripts/make-dmg.sh               # アプリをビルド → build/WhisperBatch-<バージョン>.dmg と .sha256
+./scripts/make-dmg.sh --no-build    # build/Whisper Batch.app をそのまま DMG にする
+```
+
+- バージョンは `App/Info.plist` の `CFBundleShortVersionString` から取ります。
+- DMG の作成には [dmgbuild](https://github.com/dmgbuild/dmgbuild)（PyPI、バージョン固定）を使います。初回に `.build/dmg-venv` へ取得します。Finder を操作しないので、オートメーションの許可は不要です。
+- ウィンドウの背景画像は `scripts/make-dmg-background.swift` で生成し、アイコンの配置などは `scripts/dmg-settings.py` で設定します。
+- DMG にする前に、アプリ内のファイルにこの Mac のホームディレクトリのパスが含まれていないかを調べ、含まれていれば中止します。
 
 ## テスト
 
@@ -237,7 +262,7 @@ Developer ID で配布する場合は、LGPL の「利用者がライブラリ�
 
 ## 既知の制約・未対応
 
-- アドホック署名のため、他の Mac ではそのままでは開けません（Developer ID 署名と公証が必要）。
+- アドホック署名のため、他の Mac では初回に「プライバシーとセキュリティ」での許可が必要です（上記「インストール」参照）。そのまま開けるようにするには Developer ID 署名と公証が必要です。
 - 動作確認は macOS 27.0.1 / Apple M5 / ダークモードの 1 台だけです。アクセシビリティのラベルは Accessibility API で確認しましたが、VoiceOver での読み上げは試していません。
 - 認識・変換の検証には、`say` で作った合成音声とそれを ffmpeg で動画にしたものを使いました。実際の録音・撮影データや複数話者での精度は確認していません。
 - ウィンドウ上端のタイトルバー（ツールバー部分）へのドロップは受け付けません（macOS が管理する領域のため）。それ以外のウィンドウ内の領域はドロップを受け付けます。
@@ -257,5 +282,6 @@ Sources/WhisperBatch/             SwiftUI アプリ（Views/Motion.swift にア�
 ThirdParty/LAME/                  LAME をビルドする Package.swift と macOS 用 config.h（ソースは取得スクリプトで展開）
 Tests/                            swift-testing のテスト
 App/                              Info.plist、Entitlements、アイコン、サードパーティのライセンス表記
-scripts/                          build-app.sh、test.sh、fetch-lame.sh、make-test-audio.sh、make-icon.swift
+scripts/                          build-app.sh、make-dmg.sh（＋dmg-settings.py・make-dmg-background.swift）、test.sh、
+                                  fetch-lame.sh、make-test-audio.sh、make-icon.swift
 ```
