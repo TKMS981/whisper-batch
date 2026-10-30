@@ -232,6 +232,10 @@ struct ModelCatalogTests {
         #expect(ModelCatalog.models(for: .whisper).allSatisfy { $0.folder == nil })
         let folders = ModelCatalog.models(for: .reazonSpeech).compactMap(\.folder)
         #expect(folders.count == 2 && Set(folders).count == 2)
+        // どちらもコミットを固定して取得する（main の更新で取得するファイルが変わらないように）
+        for m in ModelCatalog.models(for: .whisper) {
+            #expect(m.files.allSatisfy { $0.url.absoluteString.hasPrefix("https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c") })
+        }
         // ReazonSpeech はコミットを固定した公式リポジトリから取得する
         for m in ModelCatalog.models(for: .reazonSpeech) {
             #expect(m.files.allSatisfy { $0.url.absoluteString.hasPrefix("https://huggingface.co/reazon-research/reazonspeech-k2-v2/resolve/291488c") })

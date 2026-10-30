@@ -106,7 +106,8 @@ public enum ModelCatalog {
     public static let all: [SpeechModel] = whisper + reazonSpeech + apple
 
     /// whisper.cpp 用（ggml 形式）。多言語モデルのみ（日本語を扱うため .en モデルは含めない）。
-    /// サイズと SHA-256 は https://huggingface.co/ggerganov/whisper.cpp の値（2026-10 確認）。
+    /// https://huggingface.co/ggerganov/whisper.cpp から、コミットを固定して取得する。
+    /// サイズと SHA-256 はそのコミットの LFS メタデータの値（2026-10 確認）。
     static let whisper: [SpeechModel] = [
         whisperModel("tiny", "ggml-tiny.bin", 77_691_713,
                      "be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21"),
@@ -173,8 +174,11 @@ public enum ModelCatalog {
 
     // MARK: 定義用
 
+    /// ggerganov/whisper.cpp のコミット（2024-10-29 更新）。main が更新されても同じファイルを取得できるよう固定する。
+    private static let whisperRevision = "5359861c739e955e79d9a303bcbc70fb988958b1"
+
     private static func whisperModel(_ id: String, _ fileName: String, _ size: Int64, _ sha256: String) -> SpeechModel {
-        let url = URL(string: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/\(fileName)")!
+        let url = URL(string: "https://huggingface.co/ggerganov/whisper.cpp/resolve/\(whisperRevision)/\(fileName)")!
         return SpeechModel(id: id, engine: .whisper,
                            files: [ModelFile(name: fileName, url: url, sizeBytes: size, sha256: sha256)])
     }

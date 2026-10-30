@@ -229,7 +229,7 @@ WAV、MP3、M4A（AAC / ALAC）、AAC（ADTS）、AIFF、CAF、FLAC、Ogg Vorbis
 
 モデルはアプリに同梱していません。利用者が確認ダイアログで同意したときだけ、Hugging Face からダウンロードし、ファイルごとに SHA-256 を検証してから保存します。
 
-**Whisper**（`huggingface.co/ggerganov/whisper.cpp`）
+**Whisper**（`huggingface.co/ggerganov/whisper.cpp`、コミット `5359861` に固定）
 
 | モデル | ファイル | サイズ | 必要な空き容量の目安 |
 | --- | --- | --- | --- |
