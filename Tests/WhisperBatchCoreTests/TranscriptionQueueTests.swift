@@ -162,6 +162,19 @@ struct QueueStateTests {
 struct QueueRemoveTests {
     init() { TestLocalization.setUp() }
 
+    /// 完了した項目だけを消し、待機中・処理中・失敗は残す
+    @Test func removeAllCompletedKeepsOthers() throws {
+        var q = TranscriptionQueue()
+        q.add([candidate("/tmp/a.wav"), candidate("/tmp/b.wav"), candidate("/tmp/c.wav"), candidate("/tmp/d.wav")])
+        let ids = q.items.map(\.id)
+        try q.markProcessing(ids[0]); try q.markCompleted(ids[0], transcript: Transcript(segments: [], language: "ja"))
+        try q.markProcessing(ids[1])
+        try q.markFailed(ids[2], failure: ItemFailure(error: .nothingToExport))
+        #expect(q.removeAllCompleted() == 1)
+        #expect(q.items.map(\.id) == Array(ids[1...]))
+        #expect(q.removeAllCompleted() == 0)
+    }
+
     @Test func processingItemCannotBeRemoved() throws {
         var q = TranscriptionQueue()
         q.add([candidate("/tmp/a.wav"), candidate("/tmp/b.wav"), candidate("/tmp/c.wav")])

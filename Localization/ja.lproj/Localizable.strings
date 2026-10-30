@@ -231,13 +231,15 @@
 "queue.empty.formats" = "対応形式 — %@";
 "queue.empty.message" = "音声・動画ファイルやフォルダをウィンドウのどこかにドロップするか、下のボタンから追加してください。";
 "queue.empty.title" = "キューは空です";
-"queue.footer.completed" = "完了%ld";
+"queue.footer.clearCompleted" = "完了 %ld件を消去";
+"queue.footer.clearCompleted.help" = "完了した項目をキューから削除します。文字起こし結果も消えるので、必要なら先に保存してください。";
 "queue.footer.failed" = "失敗%ld";
 "queue.footer.menu" = "キューの操作";
 "queue.footer.pending" = "待機%ld";
 "queue.footer.remove" = "選択した項目を削除";
 "queue.footer.remove.help" = "選択した項目を削除（⌫）";
 "queue.footer.removeAll" = "処理中以外をすべて削除";
+"queue.footer.removeCompleted" = "完了した項目をすべて削除";
 "queue.footer.removePending" = "待機中の項目をすべて削除";
 "queue.footer.retryFailed" = "失敗・キャンセルした項目を再試行";
 "queue.footer.total" = "%ld件";

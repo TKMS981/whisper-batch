@@ -61,6 +61,9 @@ public final class TranscriptionService {
     @discardableResult
     public func removeAllRemovable() -> Int { queue.removeAllRemovable() }
 
+    @discardableResult
+    public func removeAllCompleted() -> Int { queue.removeAllCompleted() }
+
     /// 古くなったブックマークを作り直したときに、キューの項目へ反映する
     public func applyRefreshedBookmark(_ refreshed: SecurityScopedAccess.RefreshedBookmark, to id: UUID) {
         queue.updateLocation(id, url: refreshed.url, bookmark: refreshed.bookmark)

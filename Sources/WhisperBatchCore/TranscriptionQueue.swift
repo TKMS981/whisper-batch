@@ -260,6 +260,14 @@ public struct TranscriptionQueue: Equatable, Sendable {
         return before - items.count
     }
 
+    /// 完了した項目をすべて削除する（文字起こし結果も消える）
+    @discardableResult
+    public mutating func removeAllCompleted() -> Int {
+        let before = items.count
+        items.removeAll { $0.status == .completed }
+        return before - items.count
+    }
+
     /// 処理中以外の項目をすべて削除する
     @discardableResult
     public mutating func removeAllRemovable() -> Int {

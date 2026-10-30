@@ -309,6 +309,7 @@ private struct QueueContextMenu: View {
 
 private struct QueueFooter: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.motion) private var motion
 
     var body: some View {
         let counts = model.queue.counts
@@ -323,6 +324,8 @@ private struct QueueFooter: View {
             .accessibilityLabel(L("queue.footer.remove"))
 
             Menu {
+                Button(L("queue.footer.removeCompleted")) { model.removeCompleted() }
+                    .disabled(counts.completed == 0)
                 Button(L("queue.footer.removePending")) { model.removeAllPending() }
                     .disabled(counts.pending == 0)
                 Button(L("queue.footer.removeAll")) { model.removeAll() }
@@ -348,17 +351,53 @@ private struct QueueFooter: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .truncationMode(.tail)
+                .layoutPriority(-1)
+
+            // 完了した項目があるときだけ表示する。完了の件数はこのボタンに出すので、左の件数表示には含めない。
+            if counts.completed > 0 {
+                ClearCompletedButton(count: counts.completed) { model.removeCompleted() }
+                    .transition(.opacity)
+            }
         }
         .buttonStyle(.borderless)
+        .animation(motion.listChange, value: counts.completed > 0)
+        // 「完了を消去」ボタンの有無でバーの高さが変わらない（一覧の下端が動かない）ようにする
+        .frame(minHeight: 20)
         .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+        .padding(.vertical, 4)
     }
 
     private func summary(_ c: StatusCounts) -> String {
         var parts = [L("queue.footer.total", c.total)]
-        if c.completed > 0 { parts.append(L("queue.footer.completed", c.completed)) }
         if c.failed > 0 { parts.append(L("queue.footer.failed", c.failed)) }
         if c.pending > 0 { parts.append(L("queue.footer.pending", c.pending)) }
         return parts.joined(separator: " · ")
+    }
+}
+
+/// 完了した項目をまとめて削除するボタン（キュー下部の右端。小さなカプセル型）
+private struct ClearCompletedButton: View {
+    @Environment(\.motion) private var motion
+    let count: Int
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Label {
+                Text(L("queue.footer.clearCompleted", count))
+                    .contentTransition(motion.numberChange)
+                    .animation(motion.numberAnimation, value: count)
+            } icon: {
+                Image(systemName: "checkmark.circle")
+            }
+            .labelStyle(.titleAndIcon)
+            .lineLimit(1)
+        }
+        .buttonStyle(.bordered)
+        .buttonBorderShape(.capsule)
+        .controlSize(.small)
+        .fixedSize()
+        .help(L("queue.footer.clearCompleted.help"))
+        .accessibilityLabel(L("queue.footer.clearCompleted", count))
     }
 }

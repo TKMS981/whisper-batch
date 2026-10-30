@@ -225,6 +225,13 @@ final class AppModel {
         if queue.items.isEmpty { lastOutcome = nil; addNotice = nil }
     }
 
+    /// 完了した項目をまとめて削除する（保存し終えた結果を片付ける）
+    func removeCompleted() {
+        transcription.removeAllCompleted()
+        selection = selection.filter { queue.item($0) != nil }
+        if queue.items.isEmpty { lastOutcome = nil; addNotice = nil }
+    }
+
     func retry(_ ids: Set<UUID>) {
         if transcription.retry(ids) > 0 { lastOutcome = nil }
     }

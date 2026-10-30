@@ -231,13 +231,15 @@
 "queue.empty.formats" = "Supported formats — %@";
 "queue.empty.message" = "Drop audio or video files or folders anywhere in the window, or use the button below.";
 "queue.empty.title" = "The Queue Is Empty";
-"queue.footer.completed" = "%ld done";
+"queue.footer.clearCompleted" = "Clear %ld Done";
+"queue.footer.clearCompleted.help" = "Remove completed items from the queue. Their transcripts are removed too, so save them first if you need them.";
 "queue.footer.failed" = "%ld failed";
 "queue.footer.menu" = "Queue actions";
 "queue.footer.pending" = "%ld waiting";
 "queue.footer.remove" = "Remove selected items";
 "queue.footer.remove.help" = "Remove selected items (⌫)";
 "queue.footer.removeAll" = "Remove All Except In Progress";
+"queue.footer.removeCompleted" = "Remove All Completed Items";
 "queue.footer.removePending" = "Remove All Waiting Items";
 "queue.footer.retryFailed" = "Retry Failed and Cancelled Items";
 "queue.footer.total" = "%ld item(s)";
