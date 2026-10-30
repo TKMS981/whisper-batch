@@ -1,7 +1,7 @@
 import SwiftUI
 import WhisperBatchCore
 
-/// 設定画面（⌘,）: 一般（表示言語・自動開始）、フォント、テーマ
+/// 設定画面（⌘,）: 一般（表示言語・自動開始・Whisper の探索方式）、フォント、テーマ
 struct SettingsView: View {
     private enum Tab: Hashable { case general, font, theme }
     @ViewState private var tab = Tab.general
@@ -58,6 +58,19 @@ private struct GeneralSettingsTab: View {
                         Toggle(L("settings.autoStart.toggle"), isOn: $model.autoStartOnAdd)
                             .toggleStyle(.checkbox)
                         SettingNote(text: L("settings.autoStart.note"))
+                    }
+                }
+                .padding(.top, 10)
+            }
+            Section {
+                LabeledContent(L("settings.decoding")) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Picker(L("settings.decoding"), selection: $model.whisperDecoding) {
+                            ForEach(WhisperDecoding.allCases) { Text($0.displayName).tag($0) }
+                        }
+                        .pickerStyle(.radioGroup)
+                        .labelsHidden()
+                        SettingNote(text: L("settings.decoding.note"))
                     }
                 }
                 .padding(.top, 10)

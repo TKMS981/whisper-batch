@@ -48,6 +48,8 @@
 "convert.detail.cannotCreateFile" = "cannot create a temporary file";
 "convert.detail.encoderError" = "MP3 encoder error %ld";
 "convert.detail.encoderInit" = "cannot initialize the MP3 encoder";
+"decoding.beamSearch" = "Accuracy priority (Beam Search)";
+"decoding.greedy" = "Speed priority (Greedy)";
 "detail.cancelled.message" = "Processing of this file was stopped. Retry to return it to the waiting list.";
 "detail.cancelled.title" = "Cancelled";
 "detail.converting" = "Converting the video's audio to MP3…";
@@ -119,6 +121,7 @@
 "error.speechRecognitionUnavailable" = "macOS speech recognition isn't available on this Mac.";
 "error.transcriptionFailed" = "An error occurred during transcription (code %d).";
 "error.unsupportedFormat" = "“%@” is in an unsupported format (macOS cannot read it).";
+"error.untrustedDownloadHost" = "The download was stopped because it was redirected to a host that isn't allowed (%@). You may have been sent to a sign-in page, such as on public Wi-Fi. Sign in to the network or switch to another network, then download again.";
 "error.videoHasNoAudio" = "No audio that macOS can read was found in the video “%@” (it has no audio, or the audio format is unsupported).";
 "error.volumeUnavailable" = "Could not read or write the disk that holds “%@”. Check that the external disk or network share is connected, then try again.";
 "error.writeAccessDenied" = "You don't have permission to save “%@”. Choose another folder, such as Documents or Desktop, and save again.";
@@ -276,6 +279,8 @@
 "settings.background.preview" = "Preview:";
 "settings.background.removeImage" = "Remove";
 "settings.background.standard" = "Standard";
+"settings.decoding" = "Whisper decoding:";
+"settings.decoding.note" = "Applies only to Whisper. Speed priority is somewhat faster than accuracy priority, but may make more wording mistakes and produce longer subtitle (SRT/VTT) segments. Changes made while processing take effect from the next start.";
 "settings.engine" = "Engine";
 "settings.engine.accessibility" = "Transcription engine";
 "settings.font.family" = "Typeface:";

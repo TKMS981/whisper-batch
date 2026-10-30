@@ -26,7 +26,7 @@ public enum LanguagePreference: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
-/// 利用者の設定（文字起こしの言語・モデル・表示言語・自動開始）を UserDefaults に保存する。
+/// 利用者の設定（文字起こしの言語・モデル・Whisper の探索方式・表示言語・自動開始）を UserDefaults に保存する。
 ///
 /// 値を変えるとすぐに保存する。値の変化に応じた画面側の処理（表示言語の切り替えなど）は持たない。
 @MainActor
@@ -57,6 +57,11 @@ public final class SettingsStore {
         didSet { defaults.set(autoStartOnAdd, forKey: Keys.autoStartOnAdd) }
     }
 
+    /// Whisper の探索方式（速度優先／精度優先）
+    public var whisperDecoding: WhisperDecoding {
+        didSet { defaults.set(whisperDecoding.rawValue, forKey: Keys.whisperDecoding) }
+    }
+
     @ObservationIgnored private let defaults: UserDefaults
 
     enum Keys {
@@ -65,6 +70,7 @@ public final class SettingsStore {
         static func model(for engine: SpeechEngine) -> String { "modelID.\(engine.rawValue)" }
         static let appLanguage = "appLanguage"
         static let autoStartOnAdd = "autoStartOnAdd"
+        static let whisperDecoding = "whisperDecoding"
         /// AppKit が読む、このアプリだけの言語指定（標準メニューやパネルの言語。次回起動時に反映）
         static let appleLanguages = "AppleLanguages"
     }
@@ -77,6 +83,7 @@ public final class SettingsStore {
             ?? ModelCatalog.defaultModelID
         languagePreference = defaults.string(forKey: Keys.appLanguage).flatMap(LanguagePreference.init(rawValue:)) ?? .system
         autoStartOnAdd = defaults.bool(forKey: Keys.autoStartOnAdd)
+        whisperDecoding = defaults.string(forKey: Keys.whisperDecoding).flatMap(WhisperDecoding.init(rawValue:)) ?? .default
     }
 
     public var selectedModel: SpeechModel {

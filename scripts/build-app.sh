@@ -5,7 +5,15 @@
 #   ./scripts/build-app.sh debug      # デバッグビルド
 #
 # Xcode がなくても Command Line Tools（Swift 6.2 以降・macOS 27 SDK）で動く。
-# 署名はアドホック署名（ローカル実行用）。配布する場合は Developer ID で署名し公証すること。
+#
+# 署名:
+#   既定はアドホック署名（ローカル実行用、Hardened Runtime なし）。
+#   環境変数 WB_SIGN_IDENTITY に Developer ID の証明書名を指定すると、アプリと同梱ライブラリを
+#   その証明書で署名し、Hardened Runtime（--options runtime）と署名時刻（--timestamp）を付ける。
+#     WB_SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" ./scripts/build-app.sh
+#   WB_DISABLE_LIBRARY_VALIDATION=1 を併せて指定すると、別の署名のライブラリも読み込めるようにする
+#   （利用者が libLAME.dylib を差し替えられるようにする場合。README の「Hardened Runtime での動作」を参照）。
+#   公証は scripts/make-dmg.sh で行う。
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -13,6 +21,14 @@ config="${1:-release}"
 app_name="Whisper Batch"
 out_dir="build"
 app="$out_dir/$app_name.app"
+identity="${WB_SIGN_IDENTITY:-}"
+
+# 証明書はビルドを始める前に確かめる（見つからないなら時間をかけてビルドしない）
+if [[ -n "$identity" ]] && ! security find-identity -v -p codesigning | grep -qF "$identity"; then
+  echo "署名用の証明書がキーチェーンに見つかりません: $identity" >&2
+  echo "（security find-identity -v -p codesigning で表示される名前をそのまま指定してください）" >&2
+  exit 1
+fi
 
 # MP3 エンコーダー（LAME）のソースを取得・検証する（取得済みなら何もしない）
 ./scripts/fetch-lame.sh
@@ -71,12 +87,41 @@ fi
 strip -S -x "$app/Contents/MacOS/WhisperBatch"
 strip -S -x "$app/Contents/Frameworks/libLAME.dylib"
 
-echo "==> アドホック署名（App Sandbox 有効）"
-codesign --force --sign - --timestamp=none "$app/Contents/Frameworks/whisper.framework"
-codesign --force --sign - --timestamp=none "$app/Contents/Frameworks/libLAME.dylib"
-codesign --force --sign - --timestamp=none "$app/Contents/Frameworks/libsherpa-onnx-c-api.dylib"
-codesign --force --sign - --timestamp=none --entitlements "App/WhisperBatch.entitlements" "$app"
-codesign --verify --strict --verbose=1 "$app"
+# 同梱ライブラリを先に、アプリ本体を最後に署名する
+nested=(
+  "$app/Contents/Frameworks/whisper.framework"
+  "$app/Contents/Frameworks/libLAME.dylib"
+  "$app/Contents/Frameworks/libsherpa-onnx-c-api.dylib"
+)
+entitlements="App/WhisperBatch.entitlements"
+
+if [[ -n "$identity" ]]; then
+  echo "==> Developer ID 署名（Hardened Runtime・App Sandbox 有効）: $identity"
+  if [[ "${WB_DISABLE_LIBRARY_VALIDATION:-0}" == "1" ]]; then
+    echo "    ライブラリ検証を無効にします（com.apple.security.cs.disable-library-validation）"
+    sign_tmp="$(mktemp -d)"
+    trap 'rm -rf "$sign_tmp"' EXIT
+    cp "$entitlements" "$sign_tmp/WhisperBatch.entitlements"
+    /usr/libexec/PlistBuddy -c "Add :com.apple.security.cs.disable-library-validation bool true" "$sign_tmp/WhisperBatch.entitlements"
+    entitlements="$sign_tmp/WhisperBatch.entitlements"
+  fi
+  sign=(codesign --force --sign "$identity" --options runtime --timestamp)
+else
+  echo "==> アドホック署名（App Sandbox 有効）"
+  sign=(codesign --force --sign - --timestamp=none)
+fi
+for item in "${nested[@]}"; do
+  "${sign[@]}" "$item"
+done
+"${sign[@]}" --entitlements "$entitlements" "$app"
+codesign --verify --strict --deep --verbose=1 "$app"
+if [[ -n "$identity" ]]; then
+  # Hardened Runtime が付いているか確認する（公証の必須条件）
+  codesign --display --verbose=2 "$app" 2>&1 | grep -q "flags=.*runtime" || {
+    echo "Hardened Runtime が有効になっていません" >&2
+    exit 1
+  }
+fi
 
 echo "==> 完了: $app"
 lipo -archs "$app/Contents/MacOS/WhisperBatch"

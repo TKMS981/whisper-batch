@@ -72,6 +72,7 @@ public final class WhisperContext: @unchecked Sendable {
     func transcribe(
         samples: [Float],
         language: String?,
+        decoding: WhisperDecoding = .default,
         progress: @escaping @Sendable (Double) -> Void
     ) async throws -> ChunkResult {
         let flag = CancellationFlag()
@@ -84,7 +85,7 @@ public final class WhisperContext: @unchecked Sendable {
                         return
                     }
                     let result = Self.runFull(ctx: self.ctx, samples: samples, language: language,
-                                              flag: flag, progress: progress)
+                                              decoding: decoding, flag: flag, progress: progress)
                     continuation.resume(with: result)
                 }
             }
@@ -97,10 +98,11 @@ public final class WhisperContext: @unchecked Sendable {
         ctx: OpaquePointer,
         samples: [Float],
         language: String?,
+        decoding: WhisperDecoding,
         flag: CancellationFlag,
         progress: @escaping @Sendable (Double) -> Void
     ) -> Result<ChunkResult, any Error> {
-        var params = whisper_full_default_params(WHISPER_SAMPLING_BEAM_SEARCH)
+        var params = whisper_full_default_params(Self.samplingStrategy(for: decoding))
         params.n_threads = Int32(recommendedThreadCount)
         params.translate = false
         // 呼び出しごとに文脈（前回の認識文）をリセットする。false にすると前のファイルやチャンクの
@@ -166,6 +168,15 @@ public final class WhisperContext: @unchecked Sendable {
         let langID = whisper_full_lang_id(ctx)
         let lang = langID >= 0 ? whisper_lang_str(langID).map { String(cString: $0) } : nil
         return .success(ChunkResult(segments: segments, language: lang))
+    }
+
+    /// 速度優先は Greedy、精度優先はビーム幅 5 の Beam Search。
+    /// どちらも、結果が不確かなときは温度を上げて候補 5 つから選び直す（whisper.cpp の既定の動き）。
+    static func samplingStrategy(for decoding: WhisperDecoding) -> whisper_sampling_strategy {
+        switch decoding {
+        case .greedy: WHISPER_SAMPLING_GREEDY
+        case .beamSearch: WHISPER_SAMPLING_BEAM_SEARCH
+        }
     }
 
     /// 性能コアを中心に使い、UI 用に余裕を残す

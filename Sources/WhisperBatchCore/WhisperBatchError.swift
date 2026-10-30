@@ -21,6 +21,8 @@ public enum WhisperBatchError: Error, Equatable, Sendable {
     case insufficientDiskSpace(required: Int64, available: Int64)
     case downloadFailed(detail: String)
     case downloadHTTPError(statusCode: Int)
+    /// 許可していない接続先（Hugging Face 以外）へ接続しようとした
+    case untrustedDownloadHost(host: String)
     case checksumMismatch(modelName: String)
     case languageNotSupported(modelName: String, language: String)
     case speechRecognitionUnavailable
@@ -77,6 +79,8 @@ extension WhisperBatchError: LocalizedError {
             return L("error.downloadFailed", detail)
         case .downloadHTTPError(let statusCode):
             return L("error.downloadHTTPError", statusCode)
+        case .untrustedDownloadHost(let host):
+            return L("error.untrustedDownloadHost", host)
         case .checksumMismatch(let modelName):
             return L("error.checksumMismatch", modelName)
         case .languageNotSupported(let modelName, let language):

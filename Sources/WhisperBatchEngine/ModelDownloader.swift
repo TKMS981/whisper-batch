@@ -27,6 +27,48 @@ extension ModelDownloadInterruption: LocalizedError {
     }
 }
 
+/// モデルの取得先として接続を許可するホスト。
+///
+/// Hugging Face（huggingface.co）と、ファイルの実体の配信に使われる hf.co（例: us.aws.cdn.hf.co）と
+/// それらのサブドメインだけを、HTTPS でのみ許可する。最初の URL だけでなく、リダイレクト先も 1 回ごとに確かめる。
+enum ModelDownloadHosts {
+    static let allowedDomains = ["huggingface.co", "hf.co"]
+
+    static func isAllowed(_ url: URL?) -> Bool {
+        guard let url, url.scheme?.lowercased() == "https",
+              let host = url.host(percentEncoded: false)?.lowercased(), !host.isEmpty,
+              url.user == nil, url.password == nil,
+              url.port == nil || url.port == 443 else { return false }
+        return allowedDomains.contains { host == $0 || host.hasSuffix("." + $0) }
+    }
+
+    /// URLSession の再開用データに記録された接続先。読めなければ nil。
+    /// 再開用データは NSKeyedArchiver 形式の辞書（古い macOS では単純なプロパティリスト）。
+    static func resumeURL(in resumeData: Data) -> URL? {
+        let key = "NSURLSessionDownloadURL"
+        if let unarchiver = try? NSKeyedUnarchiver(forReadingFrom: resumeData) {
+            defer { unarchiver.finishDecoding() }
+            // 文字列・数値・データからなる辞書だけを読む（ほかのクラスのオブジェクトは作らない）。
+            // URLSession はルートを "NSKeyedArchiveRootObjectKey" という名前で保存する（定数の値 "root" ではない）
+            let classes = [NSDictionary.self, NSString.self, NSNumber.self, NSData.self, NSDate.self]
+            for rootKey in ["NSKeyedArchiveRootObjectKey", NSKeyedArchiveRootObjectKey] {
+                let root = unarchiver.decodeObject(of: classes, forKey: rootKey) as? [String: Any]
+                if let string = root?[key] as? String { return URL(string: string) }
+            }
+        }
+        if let plist = try? PropertyListSerialization.propertyList(from: resumeData, format: nil) as? [String: Any],
+           let string = plist[key] as? String {
+            return URL(string: string)
+        }
+        return nil
+    }
+
+    /// エラー表示用のホスト名
+    static func displayHost(_ url: URL?) -> String {
+        url?.host(percentEncoded: false) ?? url?.absoluteString ?? "?"
+    }
+}
+
 /// Hugging Face からモデルを取得し、ファイルごとに SHA-256 を検証してから保存する。
 /// 送信するのはファイルの取得要求だけで、音声や認識結果は送らない。
 public enum ModelDownloader {
@@ -79,6 +121,9 @@ public enum ModelDownloader {
         progress: @escaping @Sendable (Int64, Int64) -> Void,
         verifying: @escaping @Sendable () -> Void
     ) async throws(ModelDownloadInterruption) {
+        guard ModelDownloadHosts.isAllowed(file.url) else {
+            throw .init(reason: .failed(.untrustedDownloadHost(host: ModelDownloadHosts.displayHost(file.url))), resumeData: nil)
+        }
         let partial = storage.partialURL(for: file, of: model)
         let delegate = DownloadDelegate(destination: partial, expectedSize: file.sizeBytes, progress: progress)
         let config = URLSessionConfiguration.default
@@ -91,7 +136,9 @@ public enum ModelDownloader {
             try await withTaskCancellationHandler {
                 try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
                     delegate.setContinuation(continuation)
-                    let task = resumeData.map { session.downloadTask(withResumeData: $0) }
+                    // 再開用データには接続先の URL が入っている。許可した接続先でなければ使わず、最初から取得する
+                    let resume = resumeData.flatMap { ModelDownloadHosts.isAllowed(ModelDownloadHosts.resumeURL(in: $0)) ? $0 : nil }
+                    let task = resume.map { session.downloadTask(withResumeData: $0) }
                         ?? session.downloadTask(with: file.url)
                     delegate.setTask(task)
                     task.resume()
@@ -136,7 +183,7 @@ public enum ModelDownloader {
     }
 }
 
-private final class DownloadDelegate: NSObject, URLSessionDownloadDelegate, Sendable {
+private final class DownloadDelegate: NSObject, URLSessionDownloadDelegate, URLSessionTaskDelegate, Sendable {
     private struct State {
         var continuation: CheckedContinuation<Void, any Error>?
         var task: URLSessionDownloadTask?
@@ -181,10 +228,26 @@ private final class DownloadDelegate: NSObject, URLSessionDownloadDelegate, Send
         progress(totalBytesWritten, total)
     }
 
+    /// リダイレクト先が許可した接続先でなければ、たどらずに失敗にする
+    func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
+                    newRequest request: URLRequest, completionHandler: @escaping @Sendable (URLRequest?) -> Void) {
+        if ModelDownloadHosts.isAllowed(request.url) {
+            completionHandler(request)
+            return
+        }
+        state.withLock { $0.finishError = .untrustedDownloadHost(host: ModelDownloadHosts.displayHost(request.url)) }
+        completionHandler(nil)
+        task.cancel()
+    }
+
     func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
+        // 接続先を拒否した場合は、受け取った内容（リダイレクトの応答）を保存しない
+        if state.withLock({ $0.finishError }) != nil { return }
         // 一時ファイルはこのメソッドから戻ると消えるので、ここで移動する
         var failure: WhisperBatchError?
-        if let http = downloadTask.response as? HTTPURLResponse, !(200 ..< 300).contains(http.statusCode) {
+        if !ModelDownloadHosts.isAllowed(downloadTask.response?.url) {
+            failure = .untrustedDownloadHost(host: ModelDownloadHosts.displayHost(downloadTask.response?.url))
+        } else if let http = downloadTask.response as? HTTPURLResponse, !(200 ..< 300).contains(http.statusCode) {
             failure = .downloadHTTPError(statusCode: http.statusCode)
         } else {
             do {
@@ -211,16 +274,17 @@ private final class DownloadDelegate: NSObject, URLSessionDownloadDelegate, Send
             continuation.resume(throwing: ModelDownloadInterruption(reason: .cancelled, resumeData: nil))
             return
         }
+        // 接続先を拒否して中止した場合など、こちらで決めた失敗を通信エラーより優先する
+        if let finishError {
+            continuation.resume(throwing: ModelDownloadInterruption(reason: .failed(finishError), resumeData: nil))
+            return
+        }
         if let error {
             let ns = error as NSError
             let resume = ns.userInfo[NSURLSessionDownloadTaskResumeData] as? Data
             // 通信が切れた・つながらないなど、利用者が対処できる原因は具体的な案内にする
             let failure = ErrorMapper.map(error, during: .downloading) ?? .downloadFailed(detail: ns.localizedDescription)
             continuation.resume(throwing: ModelDownloadInterruption(reason: .failed(failure), resumeData: resume))
-            return
-        }
-        if let finishError {
-            continuation.resume(throwing: ModelDownloadInterruption(reason: .failed(finishError), resumeData: nil))
             return
         }
         continuation.resume()

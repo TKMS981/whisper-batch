@@ -72,6 +72,8 @@ final class AudioSampleReader {
         var result: [Float] = []
         result.reserveCapacity(maxFrames)
         while result.count < maxFrames {
+            // 長い読み出しの途中でも、中止をすぐに反映する
+            try Task.checkCancellation()
             if pendingOffset < pending.count {
                 let take = min(maxFrames - result.count, pending.count - pendingOffset)
                 result.append(contentsOf: pending[pendingOffset ..< pendingOffset + take])

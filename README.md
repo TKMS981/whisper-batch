@@ -37,7 +37,7 @@
 開発した Mac には **Xcode がなく、Command Line Tools だけ**でした。そのため次のようにしています。
 
 - Xcode プロジェクトではなく **Swift Package** で構成し、`scripts/build-app.sh` で `.app` バンドルを組み立てます。
-- 署名は **アドホック署名**（ローカル実行用）です。他の Mac に配布するには Developer ID 署名と公証（notarization）が必要です。
+- 署名の既定は **アドホック署名**（ローカル実行用）です。他の Mac に配布するには Developer ID 署名と公証（notarization）が必要で、そのための環境変数を用意しています（後述「Developer ID 署名と公証」）。
 - macOS 27 SDK では SwiftUI の `@State` が Xcode 同梱のマクロとして解決され、Command Line Tools ではビルドできません。`State` を型エイリアス `ViewState` 経由で使っています（`Sources/WhisperBatch/Views/ViewState.swift`）。
 - swift-testing のマクロプラグインが自動で読み込まれないため、`scripts/test.sh` が `-load-plugin-library` を付けて実行します。
 - String Catalog（`.xcstrings`）は Xcode の `xcstringstool` がないとコンパイルできないため、表示文字列は従来の `.strings` 形式で管理しています（後述）。
@@ -74,6 +74,29 @@ LAME は `scripts/fetch-lame.sh` が取得し、必要なソースとヘッダ�
 - DMG の作成には [dmgbuild](https://github.com/dmgbuild/dmgbuild)（PyPI、バージョン固定）を使います。初回に `.build/dmg-venv` へ取得します。Finder を操作しないので、オートメーションの許可は不要です。
 - ウィンドウの背景画像は `scripts/make-dmg-background.swift` で生成し、アイコンの配置などは `scripts/dmg-settings.py` で設定します。
 - DMG にする前に、アプリ内のファイルにこの Mac のホームディレクトリのパスが含まれていないかを調べ、含まれていれば中止します。
+
+### Developer ID 署名と公証
+
+環境変数を指定すると、Developer ID 署名と公証を行います（指定しなければアドホック署名のまま）。
+
+```sh
+# 公証用の認証情報をキーチェーンに保存しておく（最初の 1 回。App 用パスワードを入力）
+xcrun notarytool store-credentials whisper-batch --apple-id <Apple ID> --team-id <Team ID>
+
+# 署名・公証した DMG を作る
+WB_SIGN_IDENTITY="Developer ID Application: <名前> (<Team ID>)" \
+WB_NOTARY_PROFILE=whisper-batch \
+./scripts/make-dmg.sh
+```
+
+| 環境変数 | 使うスクリプト | 内容 |
+| --- | --- | --- |
+| `WB_SIGN_IDENTITY` | `build-app.sh`、`make-dmg.sh` | 署名に使う証明書の名前（`security find-identity -v -p codesigning` で表示されるもの、またはその SHA-1）。指定すると、同梱ライブラリとアプリをこの証明書で署名し、**Hardened Runtime**（`--options runtime`）と署名時刻（`--timestamp`）を付けます。DMG にも署名します |
+| `WB_NOTARY_PROFILE` | `make-dmg.sh` | `notarytool` のキーチェーンプロファイル名。指定すると、アプリと DMG をそれぞれ公証し（`notarytool submit --wait`）、チケットを添付（`stapler staple`）してから SHA-256 を計算します。`WB_SIGN_IDENTITY` が必要です |
+| `WB_DISABLE_LIBRARY_VALIDATION=1` | `build-app.sh` | Developer ID 署名のときに `com.apple.security.cs.disable-library-validation` を付けます（利用者が `libLAME.dylib` を差し替えられるようにする場合。下記「Hardened Runtime での動作」参照）。既定では付けません |
+
+- 証明書やプロファイルが見つからない場合は、ビルドを始める前に中止します。公証が受け付けられなかった場合は、`notarytool log` の内容を表示して中止します。
+- この Mac には Developer ID の証明書がないため、**署名・公証の経路は実際には試していません**（確認できたのは、指定なしでのアドホック署名と、証明書・プロファイルが見つからないときに中止すること）。初めて使うときは、できた DMG を別の Mac で開いて確認してください。
 
 ## テスト
 
@@ -124,6 +147,7 @@ WHISPER_BATCH_TEST_DOWNLOAD_DIR=/tmp/wb-models \
 - **一般**
   - 表示言語（下の「表示言語」を参照）
   - **自動開始**: 「ファイルを追加したらすぐに文字起こしを開始する」をオンにすると、ドロップや「ファイルを追加…」の時点で処理を始めます（既定はオフ）。処理中に追加したファイルは今の処理の続きで扱います。モデルが未取得などで開始できないときは、その理由をキューの上に表示します。
+  - **Whisper の認識**: 「精度優先（Beam Search）」（既定。ビーム幅 5）と「速度優先（Greedy）」から選びます。Whisper を使うときだけ反映します。Apple M5 / Large v3 Turbo で 64 秒の日本語音声を試したところ、速度優先は約 15% 速く（2.4 秒 → 2.0 秒）、文章はほぼ同じでしたが、字幕の 1 区間が長くなりました（18 区間 → 8 区間）。
 - **フォント**: 書体（インストール済みの書体から選択、既定はシステム標準）と文字の大きさ（小・標準・大・特大）。画面の文字と文字起こし結果の表示に使います。メニューなど macOS 標準の一部の部品は変わりません。保存するファイルには影響しません。
 - **テーマ**
   - **外観**: システムに合わせる / ライト / ダーク
@@ -267,8 +291,9 @@ UTF-8（BOM なし）・LF で、一時ファイル経由で置き換えるた�
 ## プライバシー
 
 - 文字起こしと動画の変換はすべてこの Mac 上で行います。音声・動画・認識結果・利用状況を外部へ送信しません。
-- 通信するのはモデルのダウンロード時だけで、送るのはファイルの取得要求（`huggingface.co` への HTTPS GET）だけです。ダウンロード前に確認ダイアログを表示します。Apple の言語データは macOS が Apple のサーバーから取得します（取得前に確認ダイアログを表示）。
-- App Sandbox を有効にしています。読み書きできるのは、利用者が選択・ドロップしたファイルと、保存先として選んだ場所、アプリ自身のコンテナだけです。選択・ドロップしたファイルには読み取り専用のセキュリティスコープ付きブックマークを作り、処理している間だけアクセスを開始して、終わったら解放します。
+- 通信するのはモデルのダウンロード時だけで、送るのはファイルの取得要求（`huggingface.co` への HTTPS GET）だけです。ダウンロード前に確認ダイアログを表示します。
+- 接続先は `huggingface.co` と `hf.co`（ファイルの実体の配信元。例: `us.aws.cdn.hf.co`）とそのサブドメインに、HTTPS でのみ限っています。最初の URL だけでなく、リダイレクト先と、中断したダウンロードの再開先も確かめ、それ以外への接続は中止します（公衆 Wi-Fi のログインページへの転送などで起こります）。Apple の言語データは macOS が Apple のサーバーから取得します（取得前に確認ダイアログを表示）。
+- App Sandbox を有効にしています。読み書きできるのは、利用者が選択・ドロップしたファイルと、保存先として選んだ場所、アプリ自身のコンテナだけです。選択・ドロップしたファイルには読み取り専用のセキュリティスコープ付きブックマークを作り、処理している間だけアクセスを開始して、終わったら解放します。ファイルの移動などでブックマークが古くなっていた（stale）場合は、アクセスしている間に作り直してキューの項目に反映します。
 - 変換用の一時 MP3 は処理後に削除し、利用者が「音声を MP3 で保存…」を選んだときだけ、選んだ場所に保存します。
 - whisper.cpp のログは出力しません（開発時の調査用に `WHISPER_BATCH_VERBOSE=1` で標準エラーに出せます）。API キーなどの秘密情報は使っていません。
 
@@ -289,7 +314,7 @@ UTF-8（BOM なし）・LF で、一時ファイル経由で置き換えるた�
 
 ### Hardened Runtime での動作（確認結果）
 
-`scripts/build-app.sh` の既定の署名は、Hardened Runtime を有効にしていません。Hardened Runtime を有効にした署名について、このアプリのコピーで次のことを確認しました（この Mac にはコード署名用の証明書がないため、すべてアドホック署名での確認です）。
+`scripts/build-app.sh` の既定の署名（アドホック署名）は、Hardened Runtime を有効にしていません（`WB_SIGN_IDENTITY` を指定したときだけ有効にします）。Hardened Runtime を有効にした署名について、このアプリのコピーで次のことを確認しました（この Mac にはコード署名用の証明書がないため、すべてアドホック署名での確認です）。
 
 | 署名の組み合わせ | 結果 |
 | --- | --- |
@@ -310,7 +335,7 @@ Developer ID で配布する場合は、LGPL の「利用者がライブラリ�
 配布の前に残っている作業:
 
 1. **Bundle ID を独自のものに変える**（現在は仮の `com.example.WhisperBatch`）。変えるとモデルの保存先（サンドボックスのコンテナ）も変わります。
-2. **他の人にアプリを配布する場合**は、Developer ID による署名と公証（notarization）が必要です。公証には Hardened Runtime が必要なので、上記「Hardened Runtime での動作」を踏まえて署名の設定を決め、実際の証明書で動作を確認してください。
+2. **他の人にアプリを配布する場合**は、Developer ID による署名と公証（notarization）が必要です（「Developer ID 署名と公証」の環境変数で行えます）。公証には Hardened Runtime が必要なので、上記「Hardened Runtime での動作」を踏まえて `WB_DISABLE_LIBRARY_VALIDATION` を使うかを決め、実際の証明書で動作を確認してください。
 3. アプリを配布する場合は、必ず `scripts/build-app.sh` で作ったものを使ってください（デバッグ情報を取り除いているため）。`swift build` の出力や `.build/` 内のファイルにはローカルパスが含まれます。なお、同梱の `whisper.framework`（whisper.cpp 公式のビルド済みバイナリ）には、エラー表示用の文字列として whisper.cpp の CI 環境（GitHub Actions）のパスが含まれています。これは第三者のビルド環境の情報で、このアプリの開発者や利用者の情報ではありません。
 
 ## 既知の制約・未対応

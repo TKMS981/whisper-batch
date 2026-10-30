@@ -3,10 +3,13 @@ import WhisperBatchCore
 
 public struct TranscriptionOptions: Sendable {
     public var language: LanguageOption
+    /// Whisper の探索方式（ほかの方式では使わない）
+    public var decoding: WhisperDecoding
     public var planner: ChunkPlanner
 
-    public init(language: LanguageOption, planner: ChunkPlanner = ChunkPlanner()) {
+    public init(language: LanguageOption, decoding: WhisperDecoding = .default, planner: ChunkPlanner = ChunkPlanner()) {
         self.language = language
+        self.decoding = decoding
         self.planner = planner
     }
 }
@@ -48,6 +51,7 @@ public enum TranscriptionEngine {
             let result = try await context.transcribe(
                 samples: samples,
                 language: language,
+                decoding: options.decoding,
                 progress: { p in
                     guard total > 0 else { return }
                     progress(min((chunkStart + p * chunkDuration) / total, 0.999))

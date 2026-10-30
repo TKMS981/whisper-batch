@@ -6,7 +6,16 @@ import WhisperBatchCore
 /// - 追加時: 選択・ドロップされた URL へのアクセスを一時的に開始し、その間にセキュリティスコープ付き
 ///   ブックマークを作る（フォルダの場合は中のファイルごとに作る）。作り終えたらアクセスを解放する。
 /// - 処理時: ブックマークから URL を復元し、処理している間だけアクセスを開始し、終わったら解放する。
+///   ブックマークが古くなっていた（stale: ファイルの移動・名前の変更・ボリュームの再接続など）場合は、
+///   アクセス中に作り直して呼び出し元へ渡す（呼び出し元はキューの項目を更新する）。
 public enum SecurityScopedAccess {
+    /// 作り直したブックマーク
+    public struct RefreshedBookmark: Equatable, Sendable {
+        /// ブックマークが指している今の場所
+        public let url: URL
+        public let bookmark: Data
+    }
+
     /// 選択・ドロップされた URL を追加候補にする。フォルダは中の対応ファイル（サブフォルダを含む、名前順）に展開する。
     @concurrent
     public static func prepareCandidates(_ urls: [URL]) async -> [FileCandidate] {
@@ -25,19 +34,25 @@ public enum SecurityScopedAccess {
         return result
     }
 
-    /// ブックマーク（なければ元の URL）でアクセスを開始し、body の実行後に必ず解放する
+    /// ブックマーク（なければ元の URL）でアクセスを開始し、body の実行後に必ず解放する。
+    /// - Parameter onRefresh: ブックマークが古くなっていて作り直せたときに、body より前に呼ばれる
     nonisolated(nonsending)
-    public static func withAccess<T>(url: URL, bookmark: Data?, _ body: (URL) async throws -> T) async throws -> T {
+    public static func withAccess<T>(url: URL, bookmark: Data?,
+                                     onRefresh: (RefreshedBookmark) -> Void = { _ in },
+                                     _ body: (URL) async throws -> T) async throws -> T {
         var target = url
-        if let bookmark {
-            var stale = false
-            if let resolved = try? URL(resolvingBookmarkData: bookmark, options: [.withSecurityScope],
-                                       relativeTo: nil, bookmarkDataIsStale: &stale) {
-                target = resolved
-            }
+        var stale = false
+        if let bookmark,
+           let resolved = try? URL(resolvingBookmarkData: bookmark, options: [.withSecurityScope],
+                                   relativeTo: nil, bookmarkDataIsStale: &stale) {
+            target = resolved
         }
         let started = target.startAccessingSecurityScopedResource()
         defer { if started { target.stopAccessingSecurityScopedResource() } }
+        // 作り直しはアクセスできている間にしかできない。作れなければ古いものを使い続ける（次回また試す）
+        if stale, let fresh = Self.bookmark(for: target) {
+            onRefresh(RefreshedBookmark(url: target, bookmark: fresh))
+        }
         return try await body(target)
     }
 

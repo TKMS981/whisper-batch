@@ -70,11 +70,12 @@ public enum ItemStatus: Equatable, Sendable {
 
 public struct QueueItem: Identifiable, Equatable, Sendable {
     public let id: UUID
-    public let url: URL
+    /// ファイルの場所（ブックマークを作り直したときに、移動先へ更新する）
+    public internal(set) var url: URL
     /// サンドボックス下で後からアクセスし直すためのセキュリティスコープ付きブックマーク
-    public let bookmark: Data?
+    public internal(set) var bookmark: Data?
     /// 重複判定用のキー
-    public let fileKey: String
+    public internal(set) var fileKey: String
     public var displayName: String
     public var duration: TimeInterval?
     /// 読み込んで確認した種類（確認前は nil）
@@ -277,6 +278,14 @@ public struct TranscriptionQueue: Equatable, Sendable {
     public mutating func setMediaKind(_ id: UUID, _ kind: MediaKind) {
         guard let i = index(id) else { return }
         items[i].mediaKind = kind
+    }
+
+    /// 作り直したブックマークと、その指している場所に置き換える（表示名と処理状態はそのまま）
+    public mutating func updateLocation(_ id: UUID, url: URL, bookmark: Data) {
+        guard let i = index(id) else { return }
+        items[i].url = url
+        items[i].bookmark = bookmark
+        items[i].fileKey = Self.fileKey(for: url)
     }
 
     /// pending → processing（指定した段階から始める）

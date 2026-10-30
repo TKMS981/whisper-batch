@@ -48,6 +48,8 @@
 "convert.detail.cannotCreateFile" = "一時ファイルを作成できません";
 "convert.detail.encoderError" = "MP3 エンコーダーのエラー %ld";
 "convert.detail.encoderInit" = "MP3 エンコーダーを初期化できません";
+"decoding.beamSearch" = "精度優先（Beam Search）";
+"decoding.greedy" = "速度優先（Greedy）";
 "detail.cancelled.message" = "このファイルの処理は中止されました。再試行すると待機中に戻ります。";
 "detail.cancelled.title" = "キャンセルされました";
 "detail.converting" = "動画の音声を MP3 に変換中…";
@@ -119,6 +121,7 @@
 "error.speechRecognitionUnavailable" = "この Mac では macOS の音声認識を使えません。";
 "error.transcriptionFailed" = "文字起こし処理でエラーが発生しました（コード %d）。";
 "error.unsupportedFormat" = "「%@」は対応していない形式です（macOS で読み込めません）。";
+"error.untrustedDownloadHost" = "許可されていない接続先（%@）へ転送されたため、ダウンロードを中止しました。公衆 Wi-Fi などのログインページへ転送された可能性があります。ネットワークにログインするか別のネットワークに切り替えてから、もう一度ダウンロードしてください。";
 "error.videoHasNoAudio" = "動画「%@」に、macOS で読み込める音声が見つかりません（音声がないか、対応していない音声形式です）。";
 "error.volumeUnavailable" = "「%@」のあるディスクを読み書きできません。外付けディスクやネットワーク上の共有フォルダがつながっているか確認してから、もう一度実行してください。";
 "error.writeAccessDenied" = "「%@」を保存する権限がありません。書類やデスクトップなど、別のフォルダを選んで保存し直してください。";
@@ -276,6 +279,8 @@
 "settings.background.preview" = "プレビュー:";
 "settings.background.removeImage" = "削除";
 "settings.background.standard" = "標準";
+"settings.decoding" = "Whisper の認識:";
+"settings.decoding.note" = "Whisper を使うときだけの設定です。速度優先は精度優先より少し速く処理しますが、言い回しの誤りが増えたり、字幕（SRT・VTT）の 1 区間が長くなったりすることがあります。処理中に変えた場合は、次の開始から反映します。";
 "settings.engine" = "方式";
 "settings.engine.accessibility" = "文字起こしの方式";
 "settings.font.family" = "書体:";

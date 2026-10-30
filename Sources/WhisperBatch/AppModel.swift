@@ -47,6 +47,12 @@ final class AppModel {
         set { settings.autoStartOnAdd = newValue }
     }
 
+    /// Whisper の探索方式（速度優先／精度優先）
+    var whisperDecoding: WhisperDecoding {
+        get { settings.whisperDecoding }
+        set { settings.whisperDecoding = newValue }
+    }
+
     /// 現在の表示言語（画面はこの値の変化で作り直す）
     private(set) var appLanguage: AppLanguage
 
@@ -244,7 +250,7 @@ final class AppModel {
         guard canStart else { return }
         lastOutcome = nil
         lastSaveMessage = nil
-        transcription.start(model: selectedModel, language: effectiveLanguage) { [weak self] outcome in
+        transcription.start(model: selectedModel, language: effectiveLanguage, decoding: whisperDecoding) { [weak self] outcome in
             if let outcome { self?.lastOutcome = outcome }
         }
     }
@@ -271,6 +277,8 @@ final class AppModel {
         guard let item = queue.item(id), mp3ExportTasks[id] == nil else { return }
         Task {
             guard let destination = await ExportService.chooseMP3Destination(for: item) else { return }
+            // 保存先を選んでいる間に、ブックマークが更新されていることがある
+            let item = queue.item(id) ?? item
             mp3Exports[id] = 0
             mp3ExportTasks[id] = Task {
                 defer {
@@ -281,8 +289,13 @@ final class AppModel {
                 do {
                     let tempURL = try ConversionWorkspace.makeTemporaryMP3URL()
                     temp = tempURL
-                    try await SecurityScopedAccess.withAccess(url: item.url, bookmark: item.bookmark) { url in
-                        try await MP3Converter.convert(source: url, destination: tempURL) { p in
+                    try await SecurityScopedAccess.withAccess(
+                        url: item.url, bookmark: item.bookmark,
+                        onRefresh: { transcription.applyRefreshedBookmark($0, to: id) }
+                    ) { url in
+                        // 一時フォルダと保存先の両方に空きがあるかを、変換を始める前に確かめる
+                        try await MP3Converter.convert(source: url, destination: tempURL,
+                                                       finalFolders: [destination.deletingLastPathComponent()]) { p in
                             Task { @MainActor in
                                 if let current = self.mp3Exports[id], p > current { self.mp3Exports[id] = p }
                             }

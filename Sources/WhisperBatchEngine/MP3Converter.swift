@@ -20,11 +20,14 @@ public enum MP3Converter {
 
     /// `source` の最初の音声トラックを MP3 にして `destination` に書き出す。
     /// 失敗・キャンセル時は書きかけの `destination` を削除する。元のファイルは変更しない。
-    /// - Parameter progress: 0...1。任意のスレッドから呼ばれる。
+    /// - Parameters:
+    ///   - finalFolders: 変換後に MP3 を移す先のフォルダ。`destination`（一時フォルダ）と合わせて、変換を始める前に空き容量を確かめる。
+    ///   - progress: 0...1。任意のスレッドから呼ばれる。
     @concurrent
     public static func convert(
         source: URL,
         destination: URL,
+        finalFolders: [URL] = [],
         progress: @escaping @Sendable (Double) -> Void
     ) async throws {
         let name = source.lastPathComponent
@@ -46,13 +49,9 @@ public enum MP3Converter {
         let seconds = (try? await asset.load(.duration)).map { CMTimeGetSeconds($0) } ?? 0
         let duration = seconds.isFinite ? max(seconds, 0) : 0
 
-        // 出力先の空き容量を確認する
+        // 書き込みを始める前に、一時フォルダと移動先の空き容量を確認する
         let required = estimatedSize(duration: duration)
-        let folder = destination.deletingLastPathComponent()
-        if let available = try? folder.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
-            .volumeAvailableCapacityForImportantUsage, available < required {
-            throw WhisperBatchError.insufficientDiskSpace(required: required, available: available)
-        }
+        try DiskSpace.ensure(required, availableIn: [destination.deletingLastPathComponent()] + finalFolders)
 
         // ステレオ以上は 2ch、モノラルは 1ch のまま
         let formats = (try? await track.load(.formatDescriptions)) ?? []

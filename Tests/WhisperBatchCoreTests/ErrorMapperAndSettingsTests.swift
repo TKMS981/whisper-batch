@@ -164,3 +164,26 @@ struct SettingsStoreTests {
         #expect(SettingsStore(defaults: defaults).selectedModelID == ModelCatalog.defaultModelID)
     }
 }
+
+@Suite("Whisper の探索方式の保存")
+@MainActor
+struct DecodingSettingTests {
+    @Test func defaultsToBeamSearchAndPersists() {
+        let suite = "WhisperBatchTests.decoding.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = SettingsStore(defaults: defaults)
+        #expect(store.whisperDecoding == .beamSearch)
+        store.whisperDecoding = .greedy
+        #expect(SettingsStore(defaults: defaults).whisperDecoding == .greedy)
+        defaults.set("unknown", forKey: "whisperDecoding")
+        #expect(SettingsStore(defaults: defaults).whisperDecoding == .beamSearch)
+    }
+
+    @Test func untrustedHostMessageTellsWhatToDo() {
+        TestLocalization.setUp()
+        let message = WhisperBatchError.untrustedDownloadHost(host: "example.com").errorDescription ?? ""
+        #expect(message.contains("example.com"))
+        #expect(message.hasSuffix("てください。"))
+    }
+}

@@ -61,6 +61,11 @@ public final class TranscriptionService {
     @discardableResult
     public func removeAllRemovable() -> Int { queue.removeAllRemovable() }
 
+    /// 古くなったブックマークを作り直したときに、キューの項目へ反映する
+    public func applyRefreshedBookmark(_ refreshed: SecurityScopedAccess.RefreshedBookmark, to id: UUID) {
+        queue.updateLocation(id, url: refreshed.url, bookmark: refreshed.bookmark)
+    }
+
     /// 失敗・キャンセル・完了した項目を待機中に戻す。戻した件数を返す。
     @discardableResult
     public func retry(_ ids: Set<UUID>) -> Int {
@@ -72,12 +77,14 @@ public final class TranscriptionService {
 
     /// 待機中の項目を順に文字起こしする。終わったとき（中止を含む）に結果を `onFinish` へ渡す。
     /// 何も処理しなかった場合の結果は nil。既に処理中なら何もしない。
-    public func start(model: SpeechModel, language: LanguageOption,
+    /// - Parameter decoding: Whisper の探索方式（ほかの方式では使わない）
+    public func start(model: SpeechModel, language: LanguageOption, decoding: WhisperDecoding = .default,
                       onFinish: @escaping @MainActor (BatchOutcome?) -> Void = { _ in }) {
         guard !isRunning else { return }
         isRunning = true
+        let options = TranscriptionOptions(language: language, decoding: decoding)
         runTask = Task {
-            let outcome = await runBatch(model: model, language: language)
+            let outcome = await runBatch(model: model, options: options)
             onFinish(outcome)
             isRunning = false
             isLoadingModel = false
@@ -94,17 +101,16 @@ public final class TranscriptionService {
         await runTask?.value
     }
 
-    private func runBatch(model: SpeechModel, language: LanguageOption) async -> BatchOutcome? {
+    private func runBatch(model: SpeechModel, options: TranscriptionOptions) async -> BatchOutcome? {
         isLoadingModel = true
         let context: any Transcriber
         do {
-            context = try await loadTranscriber(model, language)
+            context = try await loadTranscriber(model, options.language)
         } catch {
             return .couldNotStart(ItemFailure(error))
         }
         isLoadingModel = false
 
-        let options = TranscriptionOptions(language: language)
         var succeeded = 0
         var failed = 0
         var cancelled = false
@@ -138,7 +144,10 @@ public final class TranscriptionService {
     /// 1 件分の処理。動画は音声を一時 MP3 に変換してから文字起こしし、一時ファイルは必ず削除する。
     private func process(_ item: QueueItem, context: any Transcriber, options: TranscriptionOptions) async throws -> Transcript {
         let id = item.id
-        return try await SecurityScopedAccess.withAccess(url: item.url, bookmark: item.bookmark) { url in
+        return try await SecurityScopedAccess.withAccess(
+            url: item.url, bookmark: item.bookmark,
+            onRefresh: { applyRefreshedBookmark($0, to: id) }
+        ) { url in
             // 追加直後の確認が終わっていない場合もあるので、ここで種類を確かめる
             let info = try await inspectMedia(url)
             queue.setMediaKind(id, info.kind)
@@ -176,7 +185,10 @@ public final class TranscriptionService {
                 let id = probeQueue.removeFirst()
                 guard let item = queue.item(id), item.status == .pending else { continue }
                 do {
-                    let info = try await SecurityScopedAccess.withAccess(url: item.url, bookmark: item.bookmark) { url in
+                    let info = try await SecurityScopedAccess.withAccess(
+                        url: item.url, bookmark: item.bookmark,
+                        onRefresh: { applyRefreshedBookmark($0, to: id) }
+                    ) { url in
                         try await inspectMedia(url)
                     }
                     queue.setDuration(id, info.duration > 0 ? info.duration : nil)
