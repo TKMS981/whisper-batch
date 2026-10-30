@@ -208,10 +208,42 @@ struct ModelCatalogTests {
     @Test func defaultModelExistsAndCatalogIsConsistent() {
         #expect(ModelCatalog.model(id: ModelCatalog.defaultModelID) != nil)
         #expect(Set(ModelCatalog.all.map(\.id)).count == ModelCatalog.all.count)
-        for m in ModelCatalog.all {
-            #expect(m.sha256.count == 64)
+        for m in ModelCatalog.all where m.isDownloadable {
             #expect(m.requiredFreeSpace > m.sizeBytes)
-            #expect(m.downloadURL.absoluteString.hasSuffix(m.fileName))
+            for file in m.files {
+                #expect(file.sha256.count == 64)
+                #expect(file.url.scheme == "https")
+                #expect(file.url.absoluteString.hasSuffix("/" + file.name))
+            }
+            // 同じフォルダに同じ名前のファイルを置かない
+            #expect(Set(m.files.map(\.name)).count == m.files.count)
+        }
+    }
+
+    /// 方式ごとに既定のモデルがあり、Apple のモデルはダウンロードしない
+    @Test func everyEngineHasModels() {
+        for engine in SpeechEngine.allCases {
+            let models = ModelCatalog.models(for: engine)
+            #expect(!models.isEmpty)
+            #expect(ModelCatalog.defaultModel(for: engine).engine == engine)
+            #expect(models.allSatisfy { $0.isDownloadable == engine.usesDownloadedFiles })
+        }
+        // Whisper は以前の版と同じ場所（保存先の直下）、ほかは専用のフォルダ
+        #expect(ModelCatalog.models(for: .whisper).allSatisfy { $0.folder == nil })
+        let folders = ModelCatalog.models(for: .reazonSpeech).compactMap(\.folder)
+        #expect(folders.count == 2 && Set(folders).count == 2)
+        // ReazonSpeech はコミットを固定した公式リポジトリから取得する
+        for m in ModelCatalog.models(for: .reazonSpeech) {
+            #expect(m.files.allSatisfy { $0.url.absoluteString.hasPrefix("https://huggingface.co/reazon-research/reazonspeech-k2-v2/resolve/291488c") })
+        }
+    }
+
+    @Test func engineLanguageSupport() {
+        #expect(SpeechEngine.whisper.languageOptions == LanguageOption.allCases)
+        #expect(SpeechEngine.reazonSpeech.languageOptions == [.japanese])
+        #expect(!SpeechEngine.apple.languageOptions.contains(.auto))
+        for option in LanguageOption.allCases where option != .auto {
+            #expect(option.localeIdentifier != nil)
         }
     }
 
@@ -262,6 +294,10 @@ struct LocalizationTests {
         for option in LanguageOption.allCases { used.insert("whisperLanguage.\(option.id)") }
         for format in ExportFormat.allCases { used.insert("exportFormat.\(format.rawValue)") }
         for model in ModelCatalog.all { used.insert("model.\(model.id).name"); used.insert("model.\(model.id).summary") }
+        for engine in SpeechEngine.allCases {
+            for part in ["name", "summary", "source"] { used.insert("engine.\(engine.rawValue).\(part)") }
+            used.insert("models.message.\(engine.rawValue)")
+        }
         #expect(used.subtracting(ja.keys).sorted() == [])
         #expect(used.subtracting(en.keys).sorted() == [])
         // 使われていないキーがない
@@ -287,5 +323,85 @@ struct LocalizationTests {
     @Test func transcriptionLanguageIncludesEnglish() {
         #expect(LanguageOption.english.code == "en")
         #expect(LanguageOption(storageValue: "en") == .english)
+    }
+}
+
+@Suite("認識結果の区間のまとめ方")
+struct SegmentMergerTests {
+    private func seg(_ s: Double, _ e: Double, _ t: String) -> TranscriptSegment {
+        TranscriptSegment(start: s, end: e, text: t)
+    }
+
+    /// 英語の語句は空白を保ったまま、文末で区切る
+    @Test func mergesPhrasesIntoSentences() {
+        let merged = SegmentMerger.merge([
+            seg(0, 0.5, "This is"), seg(0.5, 1.2, " a test."), seg(1.3, 2.0, " The meeting"), seg(2.0, 2.6, " starts at 3."),
+        ])
+        #expect(merged == [seg(0, 1.2, "This is a test."), seg(1.3, 2.6, "The meeting starts at 3.")])
+    }
+
+    /// 間が空いたところと、長くなりすぎたところでも区切る
+    @Test func splitsOnGapsAndLength() {
+        let gap = SegmentMerger.merge([seg(0, 1, "あ"), seg(3, 4, "い")], maxGap: 1)
+        #expect(gap.map(\.text) == ["あ", "い"])
+        let long = SegmentMerger.merge([seg(0, 15, "あ"), seg(15, 30, "い")], maxDuration: 20)
+        #expect(long.map(\.text) == ["あ", "い"])
+    }
+
+    /// 空白だけの断片は区間にしない
+    @Test func dropsEmptyPieces() {
+        #expect(SegmentMerger.merge([seg(0, 1, " "), seg(1, 2, "")]).isEmpty)
+    }
+}
+
+@Suite("発話ごとの区切り")
+struct UtteranceSplitterTests {
+    private let rate = 1000.0 // 計算を簡単にするため 1kHz とする
+
+    /// 音（振幅 0.5）と無音を秒数で並べた音声
+    private func audio(_ parts: [(Bool, Double)]) -> [Float] {
+        parts.flatMap { voiced, seconds in
+            (0 ..< Int(seconds * rate)).map { i in voiced ? Float(i % 2 == 0 ? 0.5 : -0.5) : 0 }
+        }
+    }
+
+    @Test func splitsAtPauses() {
+        let samples = audio([(false, 0.5), (true, 2), (false, 0.5), (true, 1), (false, 0.5)])
+        let r = UtteranceSplitter().split(samples, sampleRate: rate, isFinal: true)
+        #expect(r.consumed == samples.count)
+        #expect(r.utterances.count == 2)
+        // 区切りは無音の中（中央付近）
+        #expect((2700 ..< 2800).contains(r.utterances[0].upperBound))
+        #expect(r.utterances[1].lowerBound == r.utterances[0].upperBound)
+    }
+
+    /// 短い無音（語の途中の詰まる音など）では区切らない
+    @Test func ignoresShortGaps() {
+        let samples = audio([(true, 1), (false, 0.1), (true, 1)])
+        let r = UtteranceSplitter().split(samples, sampleRate: rate, isFinal: true)
+        #expect(r.utterances == [0 ..< samples.count])
+    }
+
+    /// 続きがあるときは、最後の発話を次回に残す
+    @Test func keepsLastUtteranceWhenNotFinal() {
+        let samples = audio([(true, 2), (false, 0.5), (true, 1)])
+        let r = UtteranceSplitter().split(samples, sampleRate: rate, isFinal: false)
+        #expect(r.utterances.count == 1)
+        #expect((2200 ..< 2300).contains(r.consumed))
+    }
+
+    /// 長すぎる発話は最大の長さ以内に分ける
+    @Test func limitsUtteranceLength() {
+        let samples = audio([(true, 25)])
+        let r = UtteranceSplitter(maxUtterance: 10).split(samples, sampleRate: rate, isFinal: true)
+        #expect(r.utterances.count >= 3)
+        #expect(r.utterances.allSatisfy { $0.count <= 10_000 })
+        #expect(r.utterances.first?.lowerBound == 0 && r.utterances.last?.upperBound == samples.count)
+    }
+
+    /// 無音だけなら何も返さない
+    @Test func skipsSilence() {
+        let r = UtteranceSplitter().split(audio([(false, 3)]), sampleRate: rate, isFinal: true)
+        #expect(r.utterances.isEmpty)
     }
 }

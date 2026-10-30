@@ -23,14 +23,14 @@ struct ContentView: View {
                         RecognitionSettingsPanel(isCompact: isCompact)
                         Divider()
                     }
-                    .background(.background)
+                    .modifier(PanelBackground())
                 }
                 .safeAreaInset(edge: .bottom, spacing: 0) {
                     VStack(spacing: 0) {
                         Divider()
                         ExportActionBar(isCompact: isCompact)
                     }
-                    .background(.background)
+                    .modifier(PanelBackground())
                 }
                 .onGeometryChange(for: Bool.self) { $0.size.width < 700 } action: { isCompact = $0 }
                 .modifier(WindowDropTarget(column: .detail))
@@ -80,6 +80,7 @@ struct ContentView: View {
             ModelManagerSheet()
         }
         .modifier(DownloadConfirmation())
+        .modifier(WindowThemeBackground(settings: model.appearance))
         .alert(
             model.alert?.title ?? "",
             isPresented: Binding(get: { model.alert != nil }, set: { if !$0 { model.alert = nil } }),
@@ -88,6 +89,34 @@ struct ContentView: View {
             Button(L("common.ok")) {}
         } message: { info in
             Text(info.message)
+        }
+    }
+}
+
+/// テーマで背景を変えているときは、ウィンドウの背景を差し替える
+private struct WindowThemeBackground: ViewModifier {
+    let settings: AppearanceSettings
+
+    func body(content: Content) -> some View {
+        if settings.hasCustomBackground {
+            content.containerBackground(for: .window) {
+                ThemeBackground(settings: settings)
+            }
+        } else {
+            content
+        }
+    }
+}
+
+/// 上下のパネルの背景。テーマの背景があるときは半透明にして透かす。
+private struct PanelBackground: ViewModifier {
+    @Environment(\.hasCustomBackground) private var hasCustomBackground
+
+    func body(content: Content) -> some View {
+        if hasCustomBackground {
+            content.background(.thinMaterial)
+        } else {
+            content.background(.background)
         }
     }
 }
@@ -134,7 +163,7 @@ private struct DropHighlight: View {
             if showsLabel {
                 // 案内は見えている範囲（サイドバーに隠れない部分）の中央に置く
                 Label(L("drop.overlay"), systemImage: "tray.and.arrow.down.fill")
-                    .font(.title3.weight(.semibold))
+                    .appFont(.title3, weight: .semibold)
                     .foregroundStyle(.white)
                     .padding(.horizontal, 18)
                     .padding(.vertical, 12)
@@ -162,7 +191,7 @@ struct DownloadConfirmation: ViewModifier {
     func body(content: Content) -> some View {
         @Bindable var model = model
         content.alert(
-            L("download.confirm.title"),
+            Self.title(for: model.downloadConfirmation),
             isPresented: Binding(get: { model.downloadConfirmation != nil },
                                  set: { if !$0 { model.downloadConfirmation = nil } }),
             presenting: model.downloadConfirmation
@@ -170,11 +199,21 @@ struct DownloadConfirmation: ViewModifier {
             Button(L("download.confirm.download")) { model.models.download(target) }
             Button(L("common.cancel"), role: .cancel) {}
         } message: { target in
-            Text(Self.message(for: target, storagePath: model.models.storagePath))
+            Text(Self.message(for: target, model: model))
         }
     }
 
-    static func message(for target: WhisperModel, storagePath: String) -> String {
-        L("download.confirm.message", target.displayName, target.sizeText, target.requiredSpaceText, storagePath)
+    static func title(for target: SpeechModel?) -> String {
+        target?.isDownloadable == false ? L("download.confirm.title.apple") : L("download.confirm.title")
+    }
+
+    /// 取得元・サイズ・保存先の案内。Apple の言語データは OS が取得・管理する。
+    @MainActor
+    static func message(for target: SpeechModel, model: AppModel) -> String {
+        guard target.isDownloadable else {
+            return L("download.confirm.message.apple", target.displayName, model.effectiveLanguage.displayName)
+        }
+        let host = target.files.first?.url.host() ?? "huggingface.co"
+        return L("download.confirm.message", target.displayName, target.sizeText, host, target.requiredSpaceText, model.models.storagePath)
     }
 }

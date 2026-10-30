@@ -31,11 +31,11 @@ struct ChunkResult: Sendable {
 /// whisper_context は同時に 1 スレッドからしか使えないので、専用のシリアルキューで処理する。
 /// 認識は数秒〜数分ブロックするため、Swift の協調スレッドプールではなくこのキューで実行する。
 public final class WhisperContext: @unchecked Sendable {
-    public let model: WhisperModel
+    public let model: SpeechModel
     private let ctx: OpaquePointer
     private let queue: DispatchQueue
 
-    private init(model: WhisperModel, ctx: OpaquePointer, queue: DispatchQueue) {
+    private init(model: SpeechModel, ctx: OpaquePointer, queue: DispatchQueue) {
         self.model = model
         self.ctx = ctx
         self.queue = queue
@@ -46,7 +46,7 @@ public final class WhisperContext: @unchecked Sendable {
     }
 
     /// モデルファイルを読み込む。Metal（GPU）が使えない場合は CPU で読み込み直す。
-    public static func load(model: WhisperModel, fileURL: URL) async throws -> WhisperContext {
+    public static func load(model: SpeechModel, fileURL: URL) async throws -> WhisperContext {
         WhisperLogging.configure()
         let queue = DispatchQueue(label: "WhisperBatch.whisper", qos: .userInitiated)
         let path = fileURL.path

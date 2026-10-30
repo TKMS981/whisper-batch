@@ -11,6 +11,7 @@ struct WhisperBatchApp: App {
         Window("Whisper Batch", id: "main") {
             ContentView()
                 .modifier(MotionProvider())
+                .modifier(AppearanceProvider(settings: appDelegate.model.appearance, appliesBackground: true))
                 .environment(appDelegate.model)
                 // 表示言語を切り替えたら画面を作り直して、すべての文字列を新しい言語にする
                 .id(appDelegate.model.appLanguage)
@@ -23,6 +24,7 @@ struct WhisperBatchApp: App {
 
         Settings {
             SettingsView()
+                .modifier(AppearanceProvider(settings: appDelegate.model.appearance))
                 .environment(appDelegate.model)
                 .id(appDelegate.model.appLanguage)
                 .environment(\.locale, appDelegate.model.appLanguage.locale)
@@ -95,25 +97,3 @@ struct AppCommands: Commands {
     }
 }
 
-/// 設定画面（⌘,）: 表示言語
-struct SettingsView: View {
-    @Environment(AppModel.self) private var model
-
-    var body: some View {
-        @Bindable var model = model
-        Form {
-            Picker(L("settings.appLanguage"), selection: $model.languagePreference) {
-                Text(L("settings.appLanguage.system", LanguagePreference.system.resolved.nativeName)).tag(LanguagePreference.system)
-                Text(AppLanguage.japanese.nativeName).tag(LanguagePreference.japanese)
-                Text(AppLanguage.english.nativeName).tag(LanguagePreference.english)
-            }
-            .pickerStyle(.radioGroup)
-            Text(L("settings.appLanguage.note"))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: 380, alignment: .leading)
-        }
-        .padding(20)
-        .frame(width: 460)
-    }
-}

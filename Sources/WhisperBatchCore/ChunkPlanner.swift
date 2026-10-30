@@ -14,14 +14,18 @@ public struct ChunkPlanner: Sendable, Equatable {
     public var minimumAdvance: TimeInterval
     /// チャンクの終わりを、末尾からこの秒数の範囲で最も静かな位置（発話の切れ目）に合わせる
     public var boundarySearch: TimeInterval
+    /// 静かな位置を探すときの幅（秒）。広いほど、語の途中の短い無音ではなく文の間の無音を選びやすい。
+    public var silenceWindow: TimeInterval
 
     public init(chunkDuration: TimeInterval = 600, tailMargin: TimeInterval = 5,
-                minimumAdvance: TimeInterval? = nil, boundarySearch: TimeInterval = 20) {
+                minimumAdvance: TimeInterval? = nil, boundarySearch: TimeInterval = 20,
+                silenceWindow: TimeInterval = 0.2) {
         precondition(chunkDuration > tailMargin && tailMargin >= 0)
         self.chunkDuration = chunkDuration
         self.tailMargin = tailMargin
         self.minimumAdvance = minimumAdvance ?? chunkDuration / 2
-        self.boundarySearch = min(boundarySearch, chunkDuration / 3)
+        self.boundarySearch = min(boundarySearch, chunkDuration / 2)
+        self.silenceWindow = silenceWindow
     }
 
     /// 認識に渡す長さ（サンプル数）を決める。最後のチャンク以外は、末尾付近で最も静かな位置で切る。
@@ -33,7 +37,7 @@ public struct ChunkPlanner: Sendable, Equatable {
         let lower = max(samples.count - search, 0)
         let upper = samples.count - guardBand
         guard upper - lower > guardBand else { return samples.count }
-        return SilenceFinder.quietestPoint(in: samples, range: lower ..< upper, window: Int(0.2 * sampleRate))
+        return SilenceFinder.quietestPoint(in: samples, range: lower ..< upper, window: Int(silenceWindow * sampleRate))
     }
 
     public struct Decision: Equatable, Sendable {

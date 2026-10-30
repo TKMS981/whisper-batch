@@ -32,6 +32,8 @@ private struct ItemDetail: View {
     @Environment(AppModel.self) private var model
     @Environment(\.motion) private var motion
     let item: QueueItem
+    @Environment(\.appTypography) private var typography
+    @Environment(\.hasCustomBackground) private var hasCustomBackground
     @AppStorage("showTimestamps") private var showTimestamps = false
     @ViewState private var copied = false
 
@@ -55,12 +57,12 @@ private struct ItemDetail: View {
                 StatusIcon(item: item)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(item.displayName)
-                        .font(.headline)
+                        .appFont(.headline)
                         .lineLimit(1)
                         .truncationMode(.middle)
                         .textSelection(.enabled)
                     Text(detailLine)
-                        .font(.caption)
+                        .appFont(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
@@ -141,7 +143,7 @@ private struct ItemDetail: View {
                 .frame(maxWidth: 360)
                 if item.isVideo {
                     Text(L("detail.videoSteps"))
-                        .font(.caption)
+                        .appFont(.caption)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: 420)
@@ -168,7 +170,11 @@ private struct ItemDetail: View {
             }
         case .completed:
             if let transcript = item.transcript, !transcript.isEmpty {
-                TranscriptTextView(text: TranscriptFormatter.plainText(transcript, includeTimestamps: showTimestamps))
+                TranscriptTextView(
+                    text: TranscriptFormatter.plainText(transcript, includeTimestamps: showTimestamps),
+                    font: typography.nsFont(size: NSFont.systemFontSize + 1),
+                    showsBackground: !hasCustomBackground
+                )
             } else {
                 ContentUnavailableView {
                     Label(L("detail.noSpeech.title"), systemImage: "speaker.slash")
@@ -200,7 +206,7 @@ private struct MP3ExportRow: View {
                     .accessibilityLabel(L("mp3.exporting"))
                     .accessibilityValue(L("common.percent", Int(progress * 100)))
                 Text(L("mp3.exporting"))
-                    .font(.caption)
+                    .appFont(.caption)
                     .foregroundStyle(.secondary)
                 Button(L("model.stop")) { model.cancelMP3Export(for: item.id) }
             } else {
@@ -243,6 +249,9 @@ private struct MultipleSelectionView: View {
 /// 長い文章でも軽く表示でき、選択・コピー・検索（⌘F）ができる読み取り専用テキスト
 struct TranscriptTextView: NSViewRepresentable {
     let text: String
+    var font = NSFont.systemFont(ofSize: NSFont.systemFontSize + 1)
+    /// false のときは背景を描かず、テーマの背景を透かす
+    var showsBackground = true
 
     func makeNSView(context: Context) -> NSScrollView {
         let scroll = NSTextView.scrollableTextView()
@@ -255,18 +264,25 @@ struct TranscriptTextView: NSViewRepresentable {
         textView.usesFindBar = true
         textView.isIncrementalSearchingEnabled = true
         textView.textContainerInset = NSSize(width: 14, height: 12)
-        textView.drawsBackground = true
         textView.backgroundColor = .textBackgroundColor
         textView.setAccessibilityLabel(L("detail.text.accessibility"))
         // 読み取り専用なのでドロップは受け付けない。ファイルのドロップをウィンドウ全体の受け口に通す。
         textView.unregisterDraggedTypes()
+        applyBackground(to: scroll, textView: textView)
         apply(text, to: textView)
         return scroll
     }
 
     func updateNSView(_ scroll: NSScrollView, context: Context) {
-        guard let textView = scroll.documentView as? NSTextView, textView.string != text else { return }
+        guard let textView = scroll.documentView as? NSTextView else { return }
+        applyBackground(to: scroll, textView: textView)
+        guard textView.string != text || textView.font != font else { return }
         apply(text, to: textView)
+    }
+
+    private func applyBackground(to scroll: NSScrollView, textView: NSTextView) {
+        scroll.drawsBackground = showsBackground
+        textView.drawsBackground = showsBackground
     }
 
     private func apply(_ text: String, to textView: NSTextView) {
@@ -274,7 +290,7 @@ struct TranscriptTextView: NSViewRepresentable {
         style.lineSpacing = 4
         style.paragraphSpacing = 4
         let attributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: NSFont.systemFontSize + 1),
+            .font: font,
             .foregroundColor: NSColor.textColor,
             .paragraphStyle: style,
         ]

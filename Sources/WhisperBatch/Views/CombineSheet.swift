@@ -21,9 +21,9 @@ struct CombineSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(L("combine.title"))
-                .font(.title2.weight(.semibold))
+                .appFont(.title2, weight: .semibold)
             Text(L("combine.message"))
-                .font(.callout)
+                .appFont(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -36,7 +36,7 @@ struct CombineSheet: View {
                                 .labelsHidden()
                                 .accessibilityLabel(L("combine.include.accessibility", row.name))
                             Text(orderLabel(row))
-                                .font(.callout.monospacedDigit())
+                                .appFont(.callout, monospacedDigit: true)
                                 .foregroundStyle(.secondary)
                                 .frame(minWidth: 26, alignment: .trailing)
                             Text(row.name)
@@ -80,13 +80,13 @@ struct CombineSheet: View {
             if let errorMessage {
                 Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(.red)
-                    .font(.callout)
+                    .appFont(.callout)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
             HStack {
                 Text(L("combine.summary", includedCount))
-                    .font(.caption)
+                    .appFont(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
                 Button(L("common.cancel"), role: .cancel) { dismiss() }

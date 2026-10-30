@@ -113,7 +113,7 @@ struct VideoConversionTests {
     @Test(.enabled(if: modelPath != nil))
     func transcribesVideoThroughMP3() async throws {
         let url = try #require(modelPath)
-        let model = ModelCatalog.all.first { $0.fileName == url.lastPathComponent } ?? ModelCatalog.all[0]
+        let model = ModelCatalog.all.first { $0.files.first?.name == url.lastPathComponent } ?? ModelCatalog.all[0]
         let ctx = try await WhisperContext.load(model: model, fileURL: url)
         let mp3 = tempMP3()
         defer { try? FileManager.default.removeItem(at: mp3) }

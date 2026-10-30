@@ -24,9 +24,11 @@ bin_dir="$(swift build -c "$config" --arch arm64 --show-bin-path)"
 exe="$bin_dir/WhisperBatch"
 framework="$bin_dir/whisper.framework"
 lame="$bin_dir/libLAME.dylib"
+sherpa="$bin_dir/libsherpa-onnx-c-api.dylib"
 [[ -f "$exe" ]] || { echo "実行ファイルが見つかりません: $exe" >&2; exit 1; }
 [[ -d "$framework" ]] || { echo "whisper.framework が見つかりません: $framework" >&2; exit 1; }
 [[ -f "$lame" ]] || { echo "libLAME.dylib が見つかりません: $lame" >&2; exit 1; }
+[[ -f "$sherpa" ]] || { echo "libsherpa-onnx-c-api.dylib が見つかりません: $sherpa" >&2; exit 1; }
 
 echo "==> $app を作成"
 rm -rf "$app"
@@ -37,13 +39,16 @@ cp "$exe" "$app/Contents/MacOS/WhisperBatch"
 ditto "$framework" "$app/Contents/Frameworks/whisper.framework"
 # LAME は LGPL のため、差し替えできるよう動的ライブラリのまま同梱する
 cp "$lame" "$app/Contents/Frameworks/libLAME.dylib"
+# sherpa-onnx（ReazonSpeech の実行用、onnxruntime を静的に含む）
+cp "$sherpa" "$app/Contents/Frameworks/libsherpa-onnx-c-api.dylib"
 
-# whisper.framework は x86_64 も含むユニバーサルバイナリなので arm64 だけにする
-fw_bin="$app/Contents/Frameworks/whisper.framework/Versions/A/whisper"
-if lipo -archs "$fw_bin" | grep -q x86_64; then
-  lipo "$fw_bin" -thin arm64 -output "$fw_bin.arm64"
-  mv "$fw_bin.arm64" "$fw_bin"
-fi
+# whisper.framework と sherpa-onnx は x86_64 も含むユニバーサルバイナリなので arm64 だけにする
+for fw_bin in "$app/Contents/Frameworks/whisper.framework/Versions/A/whisper" "$app/Contents/Frameworks/libsherpa-onnx-c-api.dylib"; do
+  if lipo -archs "$fw_bin" | grep -q x86_64; then
+    lipo "$fw_bin" -thin arm64 -output "$fw_bin.arm64"
+    mv "$fw_bin.arm64" "$fw_bin"
+  fi
+done
 
 # アプリ内の Frameworks を参照できるようにする
 if ! otool -l "$app/Contents/MacOS/WhisperBatch" | grep -q "@executable_path/../Frameworks"; then
@@ -52,6 +57,7 @@ fi
 
 cp "App/ThirdPartyNotices.txt" "$app/Contents/Resources/ThirdPartyNotices.txt"
 cp "ThirdParty/LAME/Sources/CLAME/COPYING" "$app/Contents/Resources/LAME-COPYING.txt"
+cp App/Licenses/*.txt "$app/Contents/Resources/"
 # 表示文字列（日本語・英語）
 for lproj in Localization/*.lproj; do
   ditto "$lproj" "$app/Contents/Resources/$(basename "$lproj")"
@@ -68,6 +74,7 @@ strip -S -x "$app/Contents/Frameworks/libLAME.dylib"
 echo "==> アドホック署名（App Sandbox 有効）"
 codesign --force --sign - --timestamp=none "$app/Contents/Frameworks/whisper.framework"
 codesign --force --sign - --timestamp=none "$app/Contents/Frameworks/libLAME.dylib"
+codesign --force --sign - --timestamp=none "$app/Contents/Frameworks/libsherpa-onnx-c-api.dylib"
 codesign --force --sign - --timestamp=none --entitlements "App/WhisperBatch.entitlements" "$app"
 codesign --verify --strict --verbose=1 "$app"
 

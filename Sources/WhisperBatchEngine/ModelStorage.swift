@@ -21,26 +21,46 @@ public struct ModelStorage: Sendable {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     }
 
-    public func fileURL(for model: WhisperModel) -> URL {
-        directory.appendingPathComponent(model.fileName)
+    /// モデルのファイルを置くフォルダ（Whisper は保存先の直下）
+    public func directory(for model: SpeechModel) -> URL {
+        model.folder.map { directory.appendingPathComponent($0, isDirectory: true) } ?? directory
+    }
+
+    public func fileURL(for file: ModelFile, of model: SpeechModel) -> URL {
+        directory(for: model).appendingPathComponent(file.name)
     }
 
     /// 検証前のダウンロード済みファイル
-    func partialURL(for model: WhisperModel) -> URL {
-        directory.appendingPathComponent(model.fileName + ".download")
+    func partialURL(for file: ModelFile, of model: SpeechModel) -> URL {
+        directory(for: model).appendingPathComponent(file.name + ".download")
     }
 
-    /// 取得済みか（ファイルがあり、サイズが一致する）。内容の検証はダウンロード直後に SHA-256 で行う。
-    public func isInstalled(_ model: WhisperModel) -> Bool {
-        let path = fileURL(for: model).path
+    /// ファイルが揃っているか（あり、サイズが一致する）。内容の検証はダウンロード直後に SHA-256 で行う。
+    public func isInstalled(_ file: ModelFile, of model: SpeechModel) -> Bool {
+        let path = fileURL(for: file, of: model).path
         guard let attrs = try? FileManager.default.attributesOfItem(atPath: path),
               let size = (attrs[.size] as? NSNumber)?.int64Value else { return false }
-        return size == model.sizeBytes
+        return size == file.sizeBytes
     }
 
-    public func delete(_ model: WhisperModel) throws {
-        for url in [fileURL(for: model), partialURL(for: model)] where FileManager.default.fileExists(atPath: url.path) {
-            try FileManager.default.removeItem(at: url)
+    /// モデルのファイルがすべて揃っているか（ダウンロードしないモデルは false）
+    public func isInstalled(_ model: SpeechModel) -> Bool {
+        model.isDownloadable && model.files.allSatisfy { isInstalled($0, of: model) }
+    }
+
+    public func delete(_ model: SpeechModel) throws {
+        let fm = FileManager.default
+        for file in model.files {
+            for url in [fileURL(for: file, of: model), partialURL(for: file, of: model)] where fm.fileExists(atPath: url.path) {
+                try fm.removeItem(at: url)
+            }
+        }
+        // モデル専用のフォルダが空になったら消す
+        if model.folder != nil {
+            let dir = directory(for: model)
+            if (try? fm.contentsOfDirectory(atPath: dir.path))?.isEmpty == true {
+                try? fm.removeItem(at: dir)
+            }
         }
     }
 

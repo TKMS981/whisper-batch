@@ -54,26 +54,26 @@ struct ExportActionBar: View {
             let c = model.queue.counts
             let done = c.completed + c.failed
             Label(L("bar.running", c.pending + c.processing), systemImage: "waveform")
-                .font(.callout)
+                .appFont(.callout)
                 .foregroundStyle(.secondary)
                 .accessibilityLabel(L("bar.running.accessibility", done, c.pending + c.processing))
         } else if let outcome = model.lastOutcome, model.lastSaveMessage == nil {
             Label(outcome.message, systemImage: icon(outcome.severity))
-                .font(.callout)
+                .appFont(.callout)
                 .foregroundStyle(color(outcome.severity))
                 .lineLimit(3)
         } else if let saved = model.lastSaveMessage {
             Label(saved, systemImage: "checkmark.circle")
-                .font(.callout)
+                .appFont(.callout)
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
         } else if model.hasCompletedItems {
             Text(L("bar.readyToExport", model.queue.completedItems.count))
-                .font(.callout)
+                .appFont(.callout)
                 .foregroundStyle(.secondary)
         } else {
             Text(L("bar.idle"))
-                .font(.callout)
+                .appFont(.callout)
                 .foregroundStyle(.tertiary)
         }
     }

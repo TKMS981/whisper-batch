@@ -60,6 +60,20 @@ public enum LanguageOption: Hashable, Sendable, CaseIterable, Identifiable {
         L("whisperLanguage.\(id)")
     }
 
+    /// macOS の音声認識に渡す地域付きの言語（自動判定は nil）
+    public var localeIdentifier: String? {
+        switch self {
+        case .auto: nil
+        case .japanese: "ja-JP"
+        case .english: "en-US"
+        case .chinese: "zh-CN"
+        case .korean: "ko-KR"
+        case .spanish: "es-ES"
+        case .french: "fr-FR"
+        case .german: "de-DE"
+        }
+    }
+
     public init(storageValue: String?) {
         self = Self.allCases.first { $0.id == storageValue } ?? .japanese
     }

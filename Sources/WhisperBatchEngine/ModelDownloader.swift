@@ -27,32 +27,58 @@ extension ModelDownloadInterruption: LocalizedError {
     }
 }
 
-/// Hugging Face からモデルを取得し、SHA-256 を検証してから保存する。
+/// Hugging Face からモデルを取得し、ファイルごとに SHA-256 を検証してから保存する。
 /// 送信するのはファイルの取得要求だけで、音声や認識結果は送らない。
 public enum ModelDownloader {
+    /// 複数のファイルからなるモデルは 1 ファイルずつ取得する。取得・検証済みのファイルは取得し直さない。
     /// - Parameters:
-    ///   - resumeData: 前回失敗したときの再開用データ（あれば途中から再開）
-    ///   - progress: (受信済みバイト, 全体バイト)。任意のスレッドから呼ばれる。
-    ///   - verifying: ダウンロード後の検証を始めるときに呼ばれる
+    ///   - resumeData: 前回失敗したときの再開用データ（あれば、まだ揃っていない最初のファイルを途中から再開）
+    ///   - progress: (受信済みバイト, 全体バイト)。モデル全体での値。任意のスレッドから呼ばれる。
+    ///   - verifying: ファイルの検証を始めるときに呼ばれる
     @concurrent
     public static func download(
-        _ model: WhisperModel,
+        _ model: SpeechModel,
         into storage: ModelStorage,
         resumeData: Data?,
         progress: @escaping @Sendable (Int64, Int64) -> Void,
         verifying: @escaping @Sendable () -> Void
     ) async throws(ModelDownloadInterruption) {
         do {
-            try storage.ensureDirectory()
+            try FileManager.default.createDirectory(at: storage.directory(for: model), withIntermediateDirectories: true)
         } catch {
             throw .init(reason: .failed(.downloadFailed(detail: L("download.detail.cannotCreateFolder", error.localizedDescription))), resumeData: nil)
         }
-        if let available = storage.availableCapacity(), available < model.requiredFreeSpace {
-            throw .init(reason: .failed(.insufficientDiskSpace(required: model.requiredFreeSpace, available: available)), resumeData: resumeData)
+        let remaining = model.files.filter { !storage.isInstalled($0, of: model) }
+        let remainingBytes = remaining.reduce(Int64(0)) { $0 + $1.sizeBytes }
+        let required = remainingBytes + max(remainingBytes / 10, 50_000_000)
+        if let available = storage.availableCapacity(), available < required {
+            throw .init(reason: .failed(.insufficientDiskSpace(required: required, available: available)), resumeData: resumeData)
         }
 
-        let partial = storage.partialURL(for: model)
-        let delegate = DownloadDelegate(destination: partial, expectedSize: model.sizeBytes, progress: progress)
+        let total = model.sizeBytes
+        var done = total - remainingBytes
+        var resume = resumeData
+        for file in remaining {
+            let offset = done
+            try await downloadFile(file, of: model, into: storage, resumeData: resume,
+                                   progress: { received, _ in progress(offset + received, total) },
+                                   verifying: verifying)
+            resume = nil
+            done += file.sizeBytes
+            progress(done, total)
+        }
+    }
+
+    private static func downloadFile(
+        _ file: ModelFile,
+        of model: SpeechModel,
+        into storage: ModelStorage,
+        resumeData: Data?,
+        progress: @escaping @Sendable (Int64, Int64) -> Void,
+        verifying: @escaping @Sendable () -> Void
+    ) async throws(ModelDownloadInterruption) {
+        let partial = storage.partialURL(for: file, of: model)
+        let delegate = DownloadDelegate(destination: partial, expectedSize: file.sizeBytes, progress: progress)
         let config = URLSessionConfiguration.default
         config.urlCache = nil
         config.timeoutIntervalForRequest = 60
@@ -64,7 +90,7 @@ public enum ModelDownloader {
                 try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
                     delegate.setContinuation(continuation)
                     let task = resumeData.map { session.downloadTask(withResumeData: $0) }
-                        ?? session.downloadTask(with: model.downloadURL)
+                        ?? session.downloadTask(with: file.url)
                     delegate.setTask(task)
                     task.resume()
                 }
@@ -89,12 +115,12 @@ public enum ModelDownloader {
             try? FileManager.default.removeItem(at: partial)
             throw .init(reason: .failed(.downloadFailed(detail: L("download.detail.cannotVerify"))), resumeData: nil)
         }
-        guard digest == model.sha256 else {
+        guard digest == file.sha256 else {
             try? FileManager.default.removeItem(at: partial)
             throw .init(reason: .failed(.checksumMismatch(modelName: model.displayName)), resumeData: nil)
         }
 
-        let final = storage.fileURL(for: model)
+        let final = storage.fileURL(for: file, of: model)
         do {
             if FileManager.default.fileExists(atPath: final.path) {
                 try FileManager.default.removeItem(at: final)

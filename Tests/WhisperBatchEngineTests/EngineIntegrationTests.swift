@@ -20,7 +20,7 @@ private func audio(_ name: String) -> URL { audioDir!.appendingPathComponent(nam
 /// （ggml の Metal バックエンドは、コンテキストを解放しないままプロセスが終了すると終了処理で異常終了する）
 private func withContext<T>(_ body: (WhisperContext) async throws -> T) async throws -> T {
     let url = try #require(modelPath)
-    let model = ModelCatalog.all.first { $0.fileName == url.lastPathComponent } ?? ModelCatalog.all[0]
+    let model = ModelCatalog.all.first { $0.files.first?.name == url.lastPathComponent } ?? ModelCatalog.all[0]
     let ctx = try await WhisperContext.load(model: model, fileURL: url)
     return try await body(ctx)
 }
@@ -203,7 +203,7 @@ struct ModelDownloadTests {
         #expect(storage.isInstalled(model))
         #expect(verified.withLock { $0 })
         #expect((progress.last ?? 0) > 0.99)
-        #expect(!FileManager.default.fileExists(atPath: storage.partialURL(for: model).path))
+        #expect(!FileManager.default.fileExists(atPath: storage.partialURL(for: model.files[0], of: model).path))
 
         try storage.delete(model)
         #expect(!storage.isInstalled(model))

@@ -20,6 +20,8 @@ public enum WhisperBatchError: Error, Equatable, Sendable {
     case downloadFailed(detail: String)
     case downloadHTTPError(statusCode: Int)
     case checksumMismatch(modelName: String)
+    case languageNotSupported(modelName: String, language: String)
+    case speechRecognitionUnavailable
 
     // 認識
     case transcriptionFailed(code: Int32)
@@ -62,6 +64,10 @@ extension WhisperBatchError: LocalizedError {
             return L("error.downloadHTTPError", statusCode)
         case .checksumMismatch(let modelName):
             return L("error.checksumMismatch", modelName)
+        case .languageNotSupported(let modelName, let language):
+            return L("error.languageNotSupported", modelName, language)
+        case .speechRecognitionUnavailable:
+            return L("error.speechRecognitionUnavailable")
         case .transcriptionFailed(let code):
             return L("error.transcriptionFailed", code)
         case .exportFailed(let fileName, let detail):

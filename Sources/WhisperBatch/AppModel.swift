@@ -42,11 +42,18 @@ final class AppModel {
 
     /// 文字起こしの言語
     var language: LanguageOption {
-        didSet { UserDefaults.standard.set(language.id, forKey: Keys.language) }
+        didSet {
+            UserDefaults.standard.set(language.id, forKey: Keys.language)
+            models.transcriptionLanguage = language
+        }
     }
 
     var selectedModelID: String {
-        didSet { UserDefaults.standard.set(selectedModelID, forKey: Keys.model) }
+        didSet {
+            UserDefaults.standard.set(selectedModelID, forKey: Keys.model)
+            // 方式を切り替えて戻ったときに、前に選んでいたモデルに戻せるようにする
+            UserDefaults.standard.set(selectedModelID, forKey: Keys.model(for: selectedModel.engine))
+        }
     }
 
     /// 表示言語の設定。変えると画面の文字列がすぐに切り替わる。
@@ -54,14 +61,43 @@ final class AppModel {
         didSet { applyLanguagePreference() }
     }
 
+    /// ファイルを追加したらすぐに文字起こしを始める（既定はオフ）
+    var autoStartOnAdd: Bool {
+        didSet { UserDefaults.standard.set(autoStartOnAdd, forKey: Keys.autoStartOnAdd) }
+    }
+
     /// 現在の表示言語（画面はこの値の変化で作り直す）
     private(set) var appLanguage: AppLanguage
 
-    var selectedModel: WhisperModel {
+    var selectedModel: SpeechModel {
         ModelCatalog.model(id: selectedModelID) ?? ModelCatalog.defaultModel
     }
 
+    var selectedEngine: SpeechEngine { selectedModel.engine }
+
+    /// 実際に使う文字起こしの言語（ReazonSpeech は日本語専用）
+    var effectiveLanguage: LanguageOption {
+        selectedEngine.supports(language) ? language : (selectedEngine.languageOptions.first ?? language)
+    }
+
+    /// 方式を切り替える。前にその方式で選んでいたモデル、なければ取得済みのモデル、なければ既定のモデルにする。
+    func selectEngine(_ engine: SpeechEngine) {
+        guard engine != selectedEngine, !isRunning else { return }
+        let saved = UserDefaults.standard.string(forKey: Keys.model(for: engine)).flatMap(ModelCatalog.model(id:))
+        let model = saved.flatMap { $0.engine == engine ? $0 : nil }
+            ?? models.installedModels(for: engine).first(where: \.isDefaultForEngine)
+            ?? models.installedModels(for: engine).first
+            ?? ModelCatalog.defaultModel(for: engine)
+        selectedModelID = model.id
+        // Apple の音声認識は言語の自動判定がないので、自動判定なら表示言語に近い言語にする
+        if engine == .apple, language == .auto {
+            language = appLanguage == .english ? .english : .japanese
+        }
+    }
+
     let models = ModelManager()
+    /// 書体とテーマ
+    let appearance = AppearanceSettings()
 
     // MARK: 処理状態
 
@@ -85,7 +121,7 @@ final class AppModel {
     var showFileImporter = false
     var showCombineSheet = false
     var showModelManager = false
-    var downloadConfirmation: WhisperModel?
+    var downloadConfirmation: SpeechModel?
     var alert: AlertMessage?
 
     struct AlertMessage: Identifiable {
@@ -104,7 +140,9 @@ final class AppModel {
     private enum Keys {
         static let language = "language"
         static let model = "modelID"
+        static func model(for engine: SpeechEngine) -> String { "modelID.\(engine.rawValue)" }
         static let appLanguage = "appLanguage"
+        static let autoStartOnAdd = "autoStartOnAdd"
         /// AppKit が読む、このアプリだけの言語指定（標準メニューやパネルの言語。次回起動時に反映）
         static let appleLanguages = "AppleLanguages"
     }
@@ -116,8 +154,10 @@ final class AppModel {
         selectedModelID = savedModel.flatMap { ModelCatalog.model(id: $0)?.id } ?? ModelCatalog.defaultModelID
         let preference = defaults.string(forKey: Keys.appLanguage).flatMap(LanguagePreference.init(rawValue:)) ?? .system
         languagePreference = preference
+        autoStartOnAdd = defaults.bool(forKey: Keys.autoStartOnAdd)
         appLanguage = preference.resolved
         Localizer.shared.setLanguage(appLanguage)
+        models.transcriptionLanguage = language
         // 前回の異常終了などで残った変換用の一時ファイルを消す
         ConversionWorkspace.removeLeftovers()
     }
@@ -159,8 +199,12 @@ final class AppModel {
         if isRunning { return L("start.block.running") }
         if queue.items.isEmpty { return L("start.block.empty") }
         if !queue.hasPending { return L("start.block.noPending") }
-        if !models.isInstalled(selectedModel) { return L("start.block.noModel") }
-        return nil
+        if selectedEngine == .apple, language == .auto { return L("start.block.appleNeedsLanguage") }
+        switch models.state(for: selectedModel) {
+        case .installed: return nil
+        case .unsupported: return L("start.block.languageUnsupported", effectiveLanguage.displayName)
+        default: return selectedModel.isDownloadable ? L("start.block.noModel") : L("start.block.noAssets")
+        }
     }
 
     var hasCompletedItems: Bool { !queue.completedItems.isEmpty }
@@ -186,6 +230,18 @@ final class AppModel {
                 selection = Set(report.existingIDsForDuplicates)
             }
             enqueueProbe(report.added)
+            if autoStartOnAdd, !report.added.isEmpty { startAutomatically() }
+        }
+    }
+
+    /// 追加と同時に開始する設定のとき。処理中なら追加分も今の処理の続きで扱われる。
+    private func startAutomatically() {
+        guard !isRunning else { return }
+        if canStart {
+            start()
+        } else if let reason = startBlockReason {
+            let notice = L("autoStart.blocked", reason)
+            addNotice = addNotice.map { $0 + "\n" + notice } ?? notice
         }
     }
 
@@ -260,11 +316,10 @@ final class AppModel {
     func start() {
         guard canStart else { return }
         let model = selectedModel
-        guard let modelURL = models.fileURL(for: model) else { return }
         lastOutcome = nil
         lastSaveMessage = nil
         isRunning = true
-        runTask = Task { await runBatch(model: model, modelURL: modelURL, language: language) }
+        runTask = Task { await runBatch(model: model, language: effectiveLanguage) }
     }
 
     func cancel() {
@@ -283,7 +338,7 @@ final class AppModel {
 
     var hasActiveWork: Bool { isRunning || !mp3ExportTasks.isEmpty }
 
-    private func runBatch(model: WhisperModel, modelURL: URL, language: LanguageOption) async {
+    private func runBatch(model: SpeechModel, language: LanguageOption) async {
         defer {
             isRunning = false
             isLoadingModel = false
@@ -291,9 +346,9 @@ final class AppModel {
         }
 
         isLoadingModel = true
-        let context: WhisperContext
+        let context: any Transcriber
         do {
-            context = try await WhisperContext.load(model: model, fileURL: modelURL)
+            context = try await TranscriberLoader.load(model, storage: models.storage, language: language)
         } catch {
             lastOutcome = .couldNotStart(ItemFailure(error))
             return
@@ -333,7 +388,7 @@ final class AppModel {
     }
 
     /// 1 件分の処理。動画は音声を一時 MP3 に変換してから文字起こしし、一時ファイルは必ず削除する。
-    private func process(_ item: QueueItem, context: WhisperContext, options: TranscriptionOptions) async throws -> Transcript {
+    private func process(_ item: QueueItem, context: any Transcriber, options: TranscriptionOptions) async throws -> Transcript {
         let id = item.id
         return try await SecurityScopedAccess.withAccess(url: item.url, bookmark: item.bookmark) { url in
             // 追加直後の確認が終わっていない場合もあるので、ここで種類を確かめる
@@ -357,8 +412,8 @@ final class AppModel {
         }
     }
 
-    private func transcribe(_ url: URL, id: UUID, context: WhisperContext, options: TranscriptionOptions) async throws -> Transcript {
-        try await TranscriptionEngine.transcribe(fileURL: url, context: context, options: options) { p in
+    private func transcribe(_ url: URL, id: UUID, context: any Transcriber, options: TranscriptionOptions) async throws -> Transcript {
+        try await context.transcribe(fileURL: url, options: options) { p in
             Task { @MainActor in self.queue.updateProgress(id, phase: .transcribing, p) }
         }
     }

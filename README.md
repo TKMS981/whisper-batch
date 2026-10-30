@@ -1,13 +1,17 @@
 # Whisper Batch
 
-複数の音声・動画ファイルを Whisper でまとめて文字起こしし、結果を 1 つのファイルに統合して保存できる macOS アプリです。
+複数の音声・動画ファイルをまとめて文字起こしし、結果を 1 つのファイルに統合して保存できる macOS アプリです。文字起こしの方式は Whisper・ReazonSpeech・Apple（macOS 標準）から選べます。
 文字起こしと動画の変換はすべてこの Mac の中で行い、音声や結果を外部へ送信しません。
 
 - SwiftUI のネイティブ macOS アプリ（Apple Silicon / arm64 専用、App Sandbox 有効）
-- 認識エンジン: [whisper.cpp](https://github.com/ggml-org/whisper.cpp) v1.9.5（Metal による GPU 処理）
+- 認識エンジン（方式）:
+  - **Whisper**: [whisper.cpp](https://github.com/ggml-org/whisper.cpp) v1.9.5（Metal による GPU 処理）
+  - **ReazonSpeech**: 日本語専用の [reazonspeech-k2-v2](https://huggingface.co/reazon-research/reazonspeech-k2-v2) を [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) v1.13.8 で実行
+  - **Apple**: macOS 標準の音声認識（Speech フレームワークの SpeechAnalyzer）
 - 動画: 音声を取り出して MP3 に変換してから文字起こし（MP3 エンコードに [LAME](https://lame.sourceforge.io/) 4.0）
 - 表示言語: 日本語・英語（macOS の優先言語から自動選択、設定で切り替え可）
-- 既定モデル: Large v3 Turbo（量子化 Q5_0、574 MB）／文字起こしの初期言語: 日本語
+- 書体・文字の大きさ、背景（色・画像）とライト／ダークを設定で変更可
+- 既定の方式・モデル: Whisper の Large v3 Turbo（量子化 Q5_0、574 MB）／文字起こしの初期言語: 日本語
 
 ## インストール
 
@@ -90,6 +94,7 @@ WHISPER_BATCH_TEST_DOWNLOAD_DIR=/tmp/wb-models \
 - 表示文字列のテスト: 日英のキーが一致しているか、書式指定（`%@`・`%ld` など）が両言語で一致しているか、ソースで使っているキーがすべて定義されているか、英語に日本語が混ざっていないか
 - 動画のテスト: 対応形式の変換（出力が MP3 として読めて長さが一致し、元ファイルが変わらないこと）、非対応形式・音声のない動画・存在しないファイルのエラー、キャンセル時に書きかけの MP3 が残らないこと、動画 → MP3 → Whisper での文字起こし
 - 容量不足のテストは、小さいボリュームを用意して `WB_SMALL_VOLUME` にそのパスを指定したときだけ実行されます
+- ReazonSpeech と Apple のテスト（`Tests/WhisperBatchEngineTests/OtherEngineTests.swift`）は、`WHISPER_BATCH_TEST_SPEECH`（日本語の音声）、`WHISPER_BATCH_TEST_LONG_SPEECH`（1 分以上の日本語の音声、任意）、`WHISPER_BATCH_TEST_REAZON_DIR`（ReazonSpeech のファイルを置いたフォルダ）、`WHISPER_BATCH_TEST_APPLE_SPEECH`（英語の音声）を指定したときだけ実行されます
 
 ## 使い方
 
@@ -113,6 +118,17 @@ WHISPER_BATCH_TEST_DOWNLOAD_DIR=/tmp/wb-models \
 - **失敗**: 1 件が失敗しても残りの処理は続けます。
 - **削除・再試行**: 選択項目の削除（⌫）、待機中の一括削除、処理中以外の一括削除、失敗・キャンセルした項目の再試行。
 - キューと結果はアプリを終了すると消えます。処理中・変換中に終了しようとすると確認します。
+
+## 設定（⌘,）
+
+- **一般**
+  - 表示言語（下の「表示言語」を参照）
+  - **自動開始**: 「ファイルを追加したらすぐに文字起こしを開始する」をオンにすると、ドロップや「ファイルを追加…」の時点で処理を始めます（既定はオフ）。処理中に追加したファイルは今の処理の続きで扱います。モデルが未取得などで開始できないときは、その理由をキューの上に表示します。
+- **フォント**: 書体（インストール済みの書体から選択、既定はシステム標準）と文字の大きさ（小・標準・大・特大）。画面の文字と文字起こし結果の表示に使います。メニューなど macOS 標準の一部の部品は変わりません。保存するファイルには影響しません。
+- **テーマ**
+  - **外観**: システムに合わせる / ライト / ダーク
+  - **背景**: 標準 / 色 / 画像。色の場合、外観が「システムに合わせる」なら背景色の明るさに合わせて文字の色（ライト・ダーク）を自動で選びます。
+  - 画像の場合は**不透明度**（5〜100%、既定 30%）を指定できます。選んだ画像はアプリ専用のフォルダ（`~/Library/Containers/<Bundle ID>/Data/Library/Application Support/WhisperBatch/Background`）に複製するため、元のファイルを移動・削除しても背景は残ります。「削除」で複製も消えます。
 
 ## 動画の文字起こし（変換方式）
 
@@ -179,15 +195,41 @@ WAV、MP3、M4A（AAC / ALAC）、AAC（ADTS）、AIFF、CAF、FLAC、Ogg Vorbis
 - 開発時は、システム設定を変えずに `WHISPER_BATCH_REDUCE_MOTION=1 "build/Whisper Batch.app/Contents/MacOS/WhisperBatch"` で起動すると、「視差効果を減らす」の表示を確認できます。
 - 画面録画をコマ送りして、通常時の動き（行のフェード、アイコンの弾み、ラベルのクロスフェード、強調表示のフェード、バナー）と、「視差効果を減らす」の表示（アイコンが弾まない）を確認しました。VoiceOver などの支援技術との組み合わせは試していません。
 
-## Whisper の実装方式
+## 文字起こしの方式
+
+メイン画面の「方式」で Whisper / ReazonSpeech / Apple を切り替え、「モデル」でその方式のモデル（サイズ）を選びます。「モデル管理…」も方式ごとに一覧を切り替えられます。方式を切り替えて戻ると、前にその方式で選んでいたモデルに戻ります。
+
+| 方式 | 言語 | モデルの選択肢 | 取得元 | 特徴 |
+| --- | --- | --- | --- | --- |
+| Whisper | 多言語（自動判定あり） | Tiny 〜 Large v3 の 7 種類 | Hugging Face（ggerganov/whisper.cpp） | 精度が高い。大きいモデルほど遅い |
+| ReazonSpeech | 日本語のみ | 軽量（int8、160 MB）／高精度（615 MB） | Hugging Face（reazon-research/reazonspeech-k2-v2） | 日本語に特化。非常に速い（1 分の音声を数秒） |
+| Apple | 言語を選んで使う（自動判定なし） | SpeechTranscriber／DictationTranscriber | macOS（言語データは OS が管理） | ダウンロード不要で速い。句読点付き |
+
+### Whisper
+
 
 **whisper.cpp の公式 XCFramework** を Swift Package の `binaryTarget` として使い、C API を Swift から直接呼んでいます。完全にローカルで動き、Metal で GPU を使え、MIT License です。OpenAI の Whisper API（音声の外部送信が必要）、WhisperKit（依存が多く Core ML 用モデルが別途必要）、Homebrew の whisper-cpp（アプリ単体で完結しない）は採用していません。
 
 長時間の音声は 16 kHz モノラルで少しずつ読み出し、10 分ごとのチャンクで認識します。チャンクの境界は末尾付近の最も静かな位置に合わせ、境界で切れた区間は次のチャンクで読み直すので、文の途中で切れたり重複したりしにくくなっています。
 
+### ReazonSpeech
+
+株式会社レアゾン・ホールディングスが公開している日本語の音声認識モデル（Zipformer RNN-T、Apache License 2.0）を、k2-fsa の公式 XCFramework（`sherpa-onnx`、ONNX Runtime を内包）で動かします。モデルは公式リポジトリの ONNX ファイルを、公開時のコミットに固定して取得し、ファイルごとに SHA-256 を検証します（コードを含みうる pickle 形式のファイルは使いません）。
+
+このモデルは 1 つの発話を前提にしているため、複数の文をまとめて渡すと一部の文を出力しないことがあります（合成音声での試験で確認）。そのため、音声を文の間の無音（0.25 秒以上）で区切り、1 発話ずつ（最長 10 秒）認識します。各発話の前後には公式ライブラリと同じく 0.9 秒の無音を足します。出力に句読点は付かず、1 発話が 1 行（1 区間）になります。
+
+### Apple（macOS 標準の音声認識）
+
+- **SpeechTranscriber**（おすすめ）: 長い音声の文字起こし向け。**DictationTranscriber**: macOS の音声入力と同じ方式。
+- モデルのサイズは選べません。言語ごとのデータを macOS が Apple のサーバーから取得して管理し、ほかのアプリと共有します。このアプリからは削除しません。
+- 言語ごとに最初に「言語データを取得…」が必要です（取得済みなら不要。英語は最初から入っていることが多い）。言語の自動判定はないので、Apple を選ぶと「自動判定」は使えません。
+- 結果は語句ごとの時刻を使って文単位の区間にまとめ直します。
+
 ## モデルの取得と保存
 
-モデルはアプリに同梱していません。利用者が確認ダイアログで同意したときだけ、Hugging Face（`huggingface.co/ggerganov/whisper.cpp`）からダウンロードし、SHA-256 を検証してから保存します。
+モデルはアプリに同梱していません。利用者が確認ダイアログで同意したときだけ、Hugging Face からダウンロードし、ファイルごとに SHA-256 を検証してから保存します。
+
+**Whisper**（`huggingface.co/ggerganov/whisper.cpp`）
 
 | モデル | ファイル | サイズ | 必要な空き容量の目安 |
 | --- | --- | --- | --- |
@@ -199,7 +241,15 @@ WAV、MP3、M4A（AAC / ALAC）、AAC（ADTS）、AIFF、CAF、FLAC、Ogg Vorbis
 | Large v3 Turbo | ggml-large-v3-turbo.bin | 1.62 GB | 約 1.79 GB |
 | Large v3 | ggml-large-v3.bin | 3.10 GB | 約 3.40 GB |
 
-- 保存先: `~/Library/Containers/com.example.WhisperBatch/Data/Library/Application Support/WhisperBatch/Models/`（「モデル管理…」の「Finder で表示」で開けます）
+**ReazonSpeech**（`huggingface.co/reazon-research/reazonspeech-k2-v2`、コミット `291488c` に固定）
+
+| モデル | ファイル | サイズ | 必要な空き容量の目安 |
+| --- | --- | --- | --- |
+| **軽量（int8）** | encoder / decoder / joiner の int8 版 + tokens.txt | 160 MB | 約 210 MB（**ReazonSpeech の既定**） |
+| 高精度 | encoder / decoder / joiner + tokens.txt | 615 MB | 約 676 MB |
+
+- 保存先: `~/Library/Containers/com.example.WhisperBatch/Data/Library/Application Support/WhisperBatch/Models/`（「モデル管理…」の「Finder で表示」で開けます）。Whisper はこの直下、ReazonSpeech はモデルごとのフォルダに置きます。
+- 複数ファイルのモデルは 1 ファイルずつ取得・検証し、途中で失敗しても検証済みのファイルは取得し直しません。
 - 切り替え・削除: メイン画面のモデル選択、または「モデル管理…」
 - 通信エラーで失敗した場合は「再開」で途中から、それ以外は「再試行」で最初から取得し直します。
 
@@ -217,7 +267,7 @@ UTF-8（BOM なし）・LF で、一時ファイル経由で置き換えるた�
 ## プライバシー
 
 - 文字起こしと動画の変換はすべてこの Mac 上で行います。音声・動画・認識結果・利用状況を外部へ送信しません。
-- 通信するのはモデルのダウンロード時だけで、送るのはファイルの取得要求（`huggingface.co` への HTTPS GET）だけです。ダウンロード前に確認ダイアログを表示します。
+- 通信するのはモデルのダウンロード時だけで、送るのはファイルの取得要求（`huggingface.co` への HTTPS GET）だけです。ダウンロード前に確認ダイアログを表示します。Apple の言語データは macOS が Apple のサーバーから取得します（取得前に確認ダイアログを表示）。
 - App Sandbox を有効にしています。読み書きできるのは、利用者が選択・ドロップしたファイルと、保存先として選んだ場所、アプリ自身のコンテナだけです。選択・ドロップしたファイルには読み取り専用のセキュリティスコープ付きブックマークを作り、処理している間だけアクセスを開始して、終わったら解放します。
 - 変換用の一時 MP3 は処理後に削除し、利用者が「音声を MP3 で保存…」を選んだときだけ、選んだ場所に保存します。
 - whisper.cpp のログは出力しません（開発時の調査用に `WHISPER_BATCH_VERBOSE=1` で標準エラーに出せます）。API キーなどの秘密情報は使っていません。
@@ -229,7 +279,10 @@ UTF-8（BOM なし）・LF で、一時ファイル経由で置き換えるた�
 | Whisper Batch（このリポジトリのソース） | MIT | [LICENSE](LICENSE) |
 | whisper.cpp / ggml | MIT（© The ggml authors） | `whisper.framework` として同梱。全文を `App/ThirdPartyNotices.txt`（アプリ内 `Contents/Resources/ThirdPartyNotices.txt`）に収録 |
 | LAME 4.0 | LGPL-2.0-or-later | `libLAME.dylib` として**動的リンク**で同梱。利用者が差し替えられます。全文をアプリ内 `Contents/Resources/LAME-COPYING.txt` に収録。ソースは改変していません |
+| sherpa-onnx v1.13.8 | Apache-2.0（k2-fsa） | `libsherpa-onnx-c-api.dylib` として同梱。全文をアプリ内 `Contents/Resources/sherpa-onnx-LICENSE.txt` に収録 |
+| ONNX Runtime 1.28.2 | MIT（Microsoft） | sherpa-onnx に静的に組み込み。全文を `App/ThirdPartyNotices.txt` に、ONNX Runtime が使うライブラリの表記を `Contents/Resources/onnxruntime-ThirdPartyNotices.txt` に収録 |
 | Whisper モデル | MIT（OpenAI）。ggml 変換版（Hugging Face `ggerganov/whisper.cpp`）も MIT と表示されています | 同梱せず、利用者がダウンロード |
+| ReazonSpeech モデル（k2 v2） | Apache-2.0（レアゾン・ホールディングス） | 同梱せず、利用者がダウンロード |
 
 - LGPL のライブラリを含むアプリを配布する場合は、ライセンス文の同梱、ライブラリを差し替えられる形での提供（このアプリは動的ライブラリとして同梱）、LAME のソースの入手方法の案内が必要です。正確な条件は LGPL の本文を確認してください。
 - `libLAME.dylib` を差し替えると、アプリの署名が無効になります。現在のアドホック署名のビルドでは、差し替えたライブラリとアプリを `codesign --force --sign - Contents/Frameworks/libLAME.dylib`、`codesign --force --sign - --entitlements App/WhisperBatch.entitlements "Whisper Batch.app"` の順に再署名すれば使えます（別ビルドの libLAME.dylib に差し替えて、動画の変換・文字起こしができることを確認済み）。
@@ -267,21 +320,26 @@ Developer ID で配布する場合は、LGPL の「利用者がライブラリ�
 - 認識・変換の検証には、`say` で作った合成音声とそれを ffmpeg で動画にしたものを使いました。実際の録音・撮影データや複数話者での精度は確認していません。
 - ウィンドウ上端のタイトルバー（ツールバー部分）へのドロップは受け付けません（macOS が管理する領域のため）。それ以外のウィンドウ内の領域はドロップを受け付けます。
 - 表示言語の切り替え中に作成された一部の詳細メッセージ（ダウンロード失敗の詳細など）は、作成時の言語のまま残ることがあります。
-- 話者分離、翻訳、音声区間検出（VAD）、単語単位のタイムスタンプには対応していません。統合保存はテキスト形式のみです。
+- ReazonSpeech は文の間の無音で区切って認識するため、間を置かずに話し続ける音声では、10 秒ごとに最も静かな位置で区切ります（語の途中で切れることがあります）。出力に句読点は付きません。
+- Apple の言語データの取得は macOS が行うため、進み方は OS 次第です（開発中、日本語の取得が 0% のまましばらく進まず、後でいつの間にか完了していたことがありました）。
+- 話者分離、翻訳、単語単位のタイムスタンプには対応していません。統合保存はテキスト形式のみです。
 
 ## ソースの構成
 
 ```
-Package.swift                     whisper.cpp XCFramework（binaryTarget）、LAME（ローカルパッケージ）、3 つのターゲット
+Package.swift                     whisper.cpp と sherpa-onnx の XCFramework（binaryTarget）、LAME（ローカルパッケージ）、3 つのターゲット
 Localization/<言語>.lproj/        表示文字列（日本語・英語）
 Sources/WhisperBatchCore/         UI に依存しないロジック（キュー・状態遷移・出力形式・チャンク境界・表示言語）
-Sources/WhisperBatchEngine/       AVFoundation・whisper.cpp・MP3 変換・モデル取得
+Sources/WhisperBatchEngine/       AVFoundation・whisper.cpp・sherpa-onnx・Speech・MP3 変換・モデル取得
+  Transcriber.swift                 方式の共通の窓口（モデルの読み込み）
+  ReazonSpeechContext.swift         ReazonSpeech（発話ごとに区切って認識）
+  AppleSpeechTranscriber.swift      Apple の音声認識と言語データの管理
   MediaInspector.swift              音声か動画か、音声トラックの有無
   MP3Converter.swift                動画の音声 → MP3（AVFoundation + LAME）
-Sources/WhisperBatch/             SwiftUI アプリ（Views/Motion.swift にアニメーションの設定）
+Sources/WhisperBatch/             SwiftUI アプリ（Views/Motion.swift にアニメーション、AppearanceSettings.swift に書体とテーマの設定）
 ThirdParty/LAME/                  LAME をビルドする Package.swift と macOS 用 config.h（ソースは取得スクリプトで展開）
 Tests/                            swift-testing のテスト
-App/                              Info.plist、Entitlements、アイコン、サードパーティのライセンス表記
+App/                              Info.plist、Entitlements、アイコン、サードパーティのライセンス表記（Licenses/ に全文）
 scripts/                          build-app.sh、make-dmg.sh（＋dmg-settings.py・make-dmg-background.swift）、test.sh、
                                   fetch-lame.sh、make-test-audio.sh、make-icon.swift
 ```

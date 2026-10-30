@@ -5,6 +5,7 @@ import WhisperBatchCore
 struct QueueSidebar: View {
     @Environment(AppModel.self) private var model
     @Environment(\.motion) private var motion
+    @Environment(\.hasCustomBackground) private var hasCustomBackground
 
     var body: some View {
         @Bindable var model = model
@@ -26,6 +27,7 @@ struct QueueSidebar: View {
                 // ファイルの追加・削除で行が短くフェード（とスライド）して出入りする
                 .animation(motion.listChange, value: model.queue.items.map(\.id))
                 .listStyle(.sidebar)
+                .scrollContentBackground(hasCustomBackground ? .hidden : .automatic)
                 .frame(minHeight: 0, maxHeight: .infinity)
                 .accessibilityLabel(L("queue.accessibility"))
                 .onDeleteCommand { model.removeSelected() }
@@ -53,21 +55,21 @@ private struct EmptyQueueView: View {
                 .foregroundStyle(.secondary)
                 .accessibilityHidden(true)
             Text(L("queue.empty.title"))
-                .font(.title3.weight(.semibold))
+                .appFont(.title3, weight: .semibold)
             Text(L("queue.empty.message"))
-                .font(.callout)
+                .appFont(.callout)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
             Button(L("action.addFilesEllipsis")) { model.showFileImporter = true }
                 .controlSize(.large)
             if model.isAddingFiles { ProgressView().controlSize(.small) }
             Text(L("queue.empty.formats", AudioFormats.summary))
-                .font(.caption)
+                .appFont(.caption)
                 .foregroundStyle(.tertiary)
                 .multilineTextAlignment(.center)
             if let notice = model.addNotice {
                 Text(notice)
-                    .font(.caption)
+                    .appFont(.caption)
                     .foregroundStyle(.orange)
                     .multilineTextAlignment(.center)
             }
@@ -96,7 +98,7 @@ private struct CompactDropStrip: View {
                 .foregroundStyle(isTargeted ? Color.accentColor : .secondary)
                 .accessibilityHidden(true)
             Text(isTargeted ? L("queue.dropStrip.targeted") : L("queue.dropStrip"))
-                .font(.callout)
+                .appFont(.callout)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
             Spacer(minLength: 4)
@@ -128,7 +130,7 @@ struct NoticeBanner: View {
                 .foregroundStyle(.orange)
                 .accessibilityHidden(true)
             Text(text)
-                .font(.caption)
+                .appFont(.caption)
                 .lineLimit(6)
                 .textSelection(.enabled)
             Spacer(minLength: 0)
@@ -169,14 +171,14 @@ struct QueueRow: View {
                         .truncationMode(.middle)
                     if item.isVideo {
                         Image(systemName: "film")
-                            .font(.caption)
+                            .appFont(.caption)
                             .foregroundStyle(.secondary)
                             .help(L("queue.row.video.help"))
                             .accessibilityHidden(true)
                     }
                 }
                 Text(subtitle)
-                    .font(.caption)
+                    .appFont(.caption)
                     .foregroundStyle(subtitleColor)
                     .lineLimit(2)
                     .contentTransition(motion.numberChange)
@@ -342,7 +344,7 @@ private struct QueueFooter: View {
             Spacer(minLength: 4)
 
             Text(summary(counts))
-                .font(.caption)
+                .appFont(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .truncationMode(.tail)
