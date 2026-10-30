@@ -94,7 +94,8 @@ public enum MP3Converter {
             handle = try FileHandle(forWritingTo: destination)
         } catch {
             try? FileManager.default.removeItem(at: destination)
-            throw WhisperBatchError.conversionFailed(name: name, detail: error.localizedDescription)
+            throw ErrorMapper.map(error, during: .writing(fileName: destination.lastPathComponent))
+                ?? .conversionFailed(name: name, detail: error.localizedDescription)
         }
         defer {
             try? handle.close()
@@ -105,11 +106,9 @@ public enum MP3Converter {
             do {
                 try handle.write(contentsOf: data)
             } catch {
-                let ns = error as NSError
-                if ns.domain == NSPOSIXErrorDomain && ns.code == Int(ENOSPC) || ns.code == NSFileWriteOutOfSpaceError {
-                    throw WhisperBatchError.insufficientDiskSpace(required: required, available: 0)
-                }
-                throw WhisperBatchError.conversionFailed(name: name, detail: ns.localizedDescription)
+                // 空き容量がなくなった場合などは、次の行動が分かるエラーにする
+                throw ErrorMapper.map(error, during: .writing(fileName: destination.lastPathComponent))
+                    ?? .conversionFailed(name: name, detail: (error as NSError).localizedDescription)
             }
         }
 
@@ -123,7 +122,8 @@ public enum MP3Converter {
                     try await provider.next()
                 }
             } catch {
-                throw WhisperBatchError.conversionFailed(name: name, detail: AudioSampleReader.describe(error))
+                throw ErrorMapper.map(error, during: .reading(fileName: name))
+                    ?? .conversionFailed(name: name, detail: AudioSampleReader.describe(error))
             }
             guard let next else { break }
             let (samples, time): ([Float], Double) = next.withUnsafeSampleBuffer { buffer in

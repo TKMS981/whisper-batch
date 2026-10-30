@@ -95,12 +95,15 @@ final class AudioSampleReader {
             }
         } catch {
             finished = true
-            throw WhisperBatchError.audioDecodingFailed(name: fileName, detail: Self.describe(error))
+            // 読み込み途中でディスクが外れた場合などは、次の行動が分かるエラーにする
+            throw ErrorMapper.map(error, during: .reading(fileName: fileName))
+                ?? .audioDecodingFailed(name: fileName, detail: Self.describe(error))
         }
         guard let next else {
             finished = true
             if reader.status == .failed {
-                throw WhisperBatchError.audioDecodingFailed(name: fileName, detail: Self.describe(reader.error))
+                throw reader.error.flatMap { ErrorMapper.map($0, during: .reading(fileName: fileName)) }
+                    ?? .audioDecodingFailed(name: fileName, detail: Self.describe(reader.error))
             }
             return
         }
@@ -120,14 +123,10 @@ final class AudioSampleReader {
         pending = samples
     }
 
+    /// ファイルを開くときのエラー。権限・見つからない・ディスクの切断は `ErrorMapper` で、形式の問題は AVFoundation のコードで分類する。
     static func mapOpenError(_ error: any Error, name: String) -> WhisperBatchError {
+        if let mapped = ErrorMapper.map(error, during: .reading(fileName: name)) { return mapped }
         let ns = error as NSError
-        if ns.domain == NSCocoaErrorDomain && (ns.code == NSFileReadNoPermissionError || ns.code == NSFileReadNoSuchFileError) {
-            return ns.code == NSFileReadNoSuchFileError ? .fileNotFound(name: name) : .fileAccessDenied(name: name)
-        }
-        if ns.domain == NSPOSIXErrorDomain && ns.code == Int(EPERM) {
-            return .fileAccessDenied(name: name)
-        }
         if ns.domain == AVFoundationErrorDomain {
             switch AVError.Code(rawValue: ns.code) {
             case .fileFormatNotRecognized, .decoderNotFound, .formatUnsupported, .contentIsUnavailable, .failedToParse:

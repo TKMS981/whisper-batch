@@ -27,38 +27,30 @@ public enum TranscriptionEngine {
         let reader = try await AudioSampleReader(url: fileURL)
         let rate = AudioSampleReader.sampleRate
         let planner = options.planner
-        let chunkFrames = Int(planner.chunkDuration * rate)
         let total = reader.duration
+        var window = AudioStreamBuffer(source: reader, sampleRate: rate, capacity: Int(planner.chunkDuration * rate))
 
         var language = options.language.code
         var segments: [TranscriptSegment] = []
-        var buffer: [Float] = []
-        var bufferStart: TimeInterval = 0 // buffer 先頭の、ファイル先頭からの秒数
-        var exhausted = false
 
         progress(0)
         while true {
             try Task.checkCancellation()
-            if !exhausted {
-                let need = chunkFrames - buffer.count
-                let more = try await reader.read(maxFrames: need)
-                if more.count < need { exhausted = true }
-                buffer.append(contentsOf: more)
-            }
+            try await window.fill()
             // 末尾に残ったごく短い断片は認識しない（無音から文章を作ってしまう誤認識を避ける）
-            if buffer.isEmpty || (exhausted && Double(buffer.count) / rate < 0.3 && !segments.isEmpty) { break }
+            if window.isEmpty || (window.isExhausted && window.duration < 0.3 && !segments.isEmpty) { break }
 
             // 最後以外のチャンクは、発話の切れ目（末尾付近の最も静かな位置）までを認識する
-            let length = planner.cutLength(samples: buffer, sampleRate: rate, isFinal: exhausted)
-            let samples = length == buffer.count ? buffer : Array(buffer[..<length])
-            let bufferDuration = Double(length) / rate
-            let chunkStart = bufferStart
+            let length = planner.cutLength(samples: window.samples, sampleRate: rate, isFinal: window.isExhausted)
+            let samples = length == window.count ? window.samples : Array(window.samples[..<length])
+            let chunkDuration = Double(length) / rate
+            let chunkStart = window.startTime
             let result = try await context.transcribe(
                 samples: samples,
                 language: language,
                 progress: { p in
                     guard total > 0 else { return }
-                    progress(min((chunkStart + p * bufferDuration) / total, 0.999))
+                    progress(min((chunkStart + p * chunkDuration) / total, 0.999))
                 }
             )
             // 自動判定は最初に発話があったチャンクで確定し、以降のチャンクも同じ言語で認識する
@@ -66,15 +58,13 @@ public enum TranscriptionEngine {
                 language = detected
             }
 
-            let decision = planner.decide(segments: result.segments, bufferDuration: bufferDuration, isFinal: exhausted)
+            let decision = planner.decide(segments: result.segments, bufferDuration: chunkDuration, isFinal: window.isExhausted)
             segments += decision.accepted
                 .filter { !$0.text.isEmpty }
                 .map { TranscriptSegment(start: $0.start + chunkStart, end: $0.end + chunkStart, text: $0.text) }
 
-            if exhausted { break }
-            let drop = min(max(Int(decision.resumeAt * rate), 1), length)
-            buffer.removeFirst(drop)
-            bufferStart += Double(drop) / rate
+            if window.isExhausted { break }
+            window.consume(min(max(Int(decision.resumeAt * rate), 1), length))
         }
         progress(1)
         return Transcript(segments: segments, language: language ?? options.language.code)

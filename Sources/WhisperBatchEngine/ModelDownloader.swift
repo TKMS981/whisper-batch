@@ -46,7 +46,9 @@ public enum ModelDownloader {
         do {
             try FileManager.default.createDirectory(at: storage.directory(for: model), withIntermediateDirectories: true)
         } catch {
-            throw .init(reason: .failed(.downloadFailed(detail: L("download.detail.cannotCreateFolder", error.localizedDescription))), resumeData: nil)
+            throw .init(reason: .failed(ErrorMapper.map(error, during: .downloading)
+                    ?? .downloadFailed(detail: L("download.detail.cannotCreateFolder", error.localizedDescription))),
+                        resumeData: nil)
         }
         let remaining = model.files.filter { !storage.isInstalled($0, of: model) }
         let remainingBytes = remaining.reduce(Int64(0)) { $0 + $1.sizeBytes }
@@ -127,7 +129,9 @@ public enum ModelDownloader {
             }
             try FileManager.default.moveItem(at: partial, to: final)
         } catch {
-            throw .init(reason: .failed(.downloadFailed(detail: L("download.detail.cannotSave", error.localizedDescription))), resumeData: nil)
+            throw .init(reason: .failed(ErrorMapper.map(error, during: .downloading)
+                    ?? .downloadFailed(detail: L("download.detail.cannotSave", error.localizedDescription))),
+                        resumeData: nil)
         }
     }
 }
@@ -189,7 +193,8 @@ private final class DownloadDelegate: NSObject, URLSessionDownloadDelegate, Send
                 }
                 try FileManager.default.moveItem(at: location, to: destination)
             } catch {
-                failure = .downloadFailed(detail: L("download.detail.cannotMoveTemp", error.localizedDescription))
+                failure = ErrorMapper.map(error, during: .downloading)
+                    ?? .downloadFailed(detail: L("download.detail.cannotMoveTemp", error.localizedDescription))
             }
         }
         if let failure { state.withLock { $0.finishError = failure } }
@@ -209,8 +214,9 @@ private final class DownloadDelegate: NSObject, URLSessionDownloadDelegate, Send
         if let error {
             let ns = error as NSError
             let resume = ns.userInfo[NSURLSessionDownloadTaskResumeData] as? Data
-            let detail = ns.localizedDescription
-            continuation.resume(throwing: ModelDownloadInterruption(reason: .failed(.downloadFailed(detail: detail)), resumeData: resume))
+            // 通信が切れた・つながらないなど、利用者が対処できる原因は具体的な案内にする
+            let failure = ErrorMapper.map(error, during: .downloading) ?? .downloadFailed(detail: ns.localizedDescription)
+            continuation.resume(throwing: ModelDownloadInterruption(reason: .failed(failure), resumeData: resume))
             return
         }
         if let finishError {

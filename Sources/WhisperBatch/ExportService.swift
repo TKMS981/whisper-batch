@@ -126,7 +126,9 @@ enum ExportService {
                 try fm.moveItem(at: temp, to: destination)
             }
         } catch {
-            throw WhisperBatchError.exportFailed(fileName: destination.lastPathComponent, detail: (error as NSError).localizedDescription)
+            let name = destination.lastPathComponent
+            throw ErrorMapper.map(error, during: .writing(fileName: name))
+                ?? .exportFailed(fileName: name, detail: (error as NSError).localizedDescription)
         }
     }
 
@@ -164,15 +166,10 @@ enum ExportService {
         do {
             try Data(text.utf8).write(to: url, options: [.atomic])
         } catch {
-            let ns = error as NSError
-            let detail: String
-            switch ns.code {
-            case NSFileWriteNoPermissionError: detail = L("export.detail.noPermission")
-            case NSFileWriteOutOfSpaceError: detail = L("export.detail.outOfSpace")
-            case NSFileWriteVolumeReadOnlyError: detail = L("export.detail.readOnly")
-            default: detail = ns.localizedDescription
-            }
-            throw WhisperBatchError.exportFailed(fileName: url.lastPathComponent, detail: detail)
+            // 権限・空き容量・読み取り専用などは、別の保存先を選ぶなどの案内を含むエラーにする
+            let name = url.lastPathComponent
+            throw ErrorMapper.map(error, during: .writing(fileName: name))
+                ?? .exportFailed(fileName: name, detail: (error as NSError).localizedDescription)
         }
     }
 

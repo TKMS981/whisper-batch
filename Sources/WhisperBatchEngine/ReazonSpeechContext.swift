@@ -112,41 +112,32 @@ extension ReazonSpeechContext: Transcriber {
         let reader = try await AudioSampleReader(url: fileURL)
         let rate = AudioSampleReader.sampleRate
         let splitter = UtteranceSplitter()
-        let blockFrames = Int(Self.blockDuration * rate)
         let pad = [Float](repeating: 0, count: Int(Self.padding * rate))
         let total = reader.duration
+        var window = AudioStreamBuffer(source: reader, sampleRate: rate, capacity: Int(Self.blockDuration * rate))
 
         var segments: [TranscriptSegment] = []
-        var buffer: [Float] = []
-        var bufferStart: TimeInterval = 0 // buffer 先頭の、ファイル先頭からの秒数
-        var exhausted = false
 
         progress(0)
         while true {
             try Task.checkCancellation()
-            if !exhausted {
-                let need = blockFrames - buffer.count
-                let more = try await reader.read(maxFrames: need)
-                if more.count < need { exhausted = true }
-                buffer.append(contentsOf: more)
-            }
-            let result = splitter.split(buffer, sampleRate: rate, isFinal: exhausted)
+            try await window.fill()
+            let result = splitter.split(window.samples, sampleRate: rate, isFinal: window.isExhausted)
             for range in result.utterances {
                 try Task.checkCancellation()
-                let tokens = await decode(pad + buffer[range] + pad)
+                let tokens = await decode(pad + window.samples[range] + pad)
                 let text = tokens.map(\.text).joined().trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !text.isEmpty else { continue }
                 // 時刻は足した無音の分を差し引き、発話の範囲に収める
-                let utteranceStart = bufferStart + Double(range.lowerBound) / rate
-                let utteranceEnd = bufferStart + Double(range.upperBound) / rate
+                let utteranceStart = window.time(atFrame: range.lowerBound)
+                let utteranceEnd = window.time(atFrame: range.upperBound)
                 let first = tokens.first.map { utteranceStart + $0.start - Self.padding } ?? utteranceStart
                 let start = min(max(first, utteranceStart), utteranceEnd)
                 segments.append(TranscriptSegment(start: start, end: utteranceEnd, text: text))
                 if total > 0 { progress(min(utteranceEnd / total, 0.999)) }
             }
-            buffer.removeFirst(result.consumed)
-            bufferStart += Double(result.consumed) / rate
-            if exhausted && (buffer.isEmpty || result.consumed == 0) { break }
+            window.consume(result.consumed)
+            if window.isExhausted && (window.isEmpty || result.consumed == 0) { break }
         }
         progress(1)
         return Transcript(segments: segments, language: "ja")

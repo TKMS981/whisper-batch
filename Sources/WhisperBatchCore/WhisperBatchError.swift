@@ -9,6 +9,8 @@ public enum WhisperBatchError: Error, Equatable, Sendable {
     case noAudioTrack(name: String)
     case videoHasNoAudio(name: String)
     case audioDecodingFailed(name: String, detail: String)
+    /// ファイルのあるディスク（外付け・ネットワーク上）に接続できない
+    case volumeUnavailable(name: String)
 
     // 動画の変換
     case conversionFailed(name: String, detail: String)
@@ -22,6 +24,17 @@ public enum WhisperBatchError: Error, Equatable, Sendable {
     case checksumMismatch(modelName: String)
     case languageNotSupported(modelName: String, language: String)
     case speechRecognitionUnavailable
+
+    // 通信
+    case networkOffline
+    case networkInterrupted
+    case serverUnreachable
+
+    // 保存先
+    /// 空き容量がなくなった（必要量が分からない場合）
+    case diskFull
+    case writeAccessDenied(fileName: String)
+    case readOnlyVolume
 
     // 認識
     case transcriptionFailed(code: Int32)
@@ -49,6 +62,8 @@ extension WhisperBatchError: LocalizedError {
             return L("error.videoHasNoAudio", name)
         case .audioDecodingFailed(let name, let detail):
             return L("error.audioDecodingFailed", name, detail)
+        case .volumeUnavailable(let name):
+            return L("error.volumeUnavailable", name)
         case .conversionFailed(let name, let detail):
             return L("error.conversionFailed", name, detail)
         case .modelNotInstalled(let modelName):
@@ -68,6 +83,18 @@ extension WhisperBatchError: LocalizedError {
             return L("error.languageNotSupported", modelName, language)
         case .speechRecognitionUnavailable:
             return L("error.speechRecognitionUnavailable")
+        case .networkOffline:
+            return L("error.networkOffline")
+        case .networkInterrupted:
+            return L("error.networkInterrupted")
+        case .serverUnreachable:
+            return L("error.serverUnreachable")
+        case .diskFull:
+            return L("error.diskFull")
+        case .writeAccessDenied(let fileName):
+            return L("error.writeAccessDenied", fileName)
+        case .readOnlyVolume:
+            return L("error.readOnlyVolume")
         case .transcriptionFailed(let code):
             return L("error.transcriptionFailed", code)
         case .exportFailed(let fileName, let detail):
@@ -90,9 +117,9 @@ extension ByteCountFormatter {
     }
 }
 
-/// どんなエラーでも利用者向けの文にする
-public func userFacingMessage(for error: any Error) -> String {
-    if let e = error as? WhisperBatchError, let d = e.errorDescription { return d }
+/// どんなエラーでも利用者向けの文にする。OS のエラーは、分かる範囲で次の行動を含む文にする（`ErrorMapper`）。
+public func userFacingMessage(for error: any Error, during operation: ErrorMapper.Operation = .unspecified) -> String {
+    if let e = ErrorMapper.map(error, during: operation), let d = e.errorDescription { return d }
     if let e = error as? LocalizedError, let d = e.errorDescription { return d }
     return (error as NSError).localizedDescription
 }

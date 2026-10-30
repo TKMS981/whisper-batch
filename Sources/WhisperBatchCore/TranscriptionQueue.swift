@@ -14,9 +14,10 @@ public struct ItemFailure: Equatable, Sendable {
     /// WhisperBatchError 以外のエラーの説明（OS が返した文など）
     public var fallbackMessage: String
 
-    public init(_ error: any Error) {
-        self.error = error as? WhisperBatchError
-        self.fallbackMessage = userFacingMessage(for: error)
+    /// OS のエラーは `ErrorMapper` で分類し、分類できたものは表示言語の切り替えにも追従させる
+    public init(_ error: any Error, during operation: ErrorMapper.Operation = .unspecified) {
+        self.error = ErrorMapper.map(error, during: operation)
+        self.fallbackMessage = userFacingMessage(for: error, during: operation)
     }
 
     public init(error: WhisperBatchError) {
