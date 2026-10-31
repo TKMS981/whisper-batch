@@ -20,6 +20,8 @@
   <ItemGroup>
     <Resource Include="..\..\App\AppIcon.ico" Link="AppIcon.ico" />
     <None Include="..\..\App\ThirdPartyNotices.txt" Link="ThirdPartyNotices.txt" CopyToOutputDirectory="PreserveNewest" />
+    <!-- sherpa-onnx・ONNX Runtime のライセンス全文 -->
+    <None Include="..\..\App\Licenses\*.txt" Link="Licenses\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\LICENSE" Link="LICENSE.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <Import Project="..\Native.targets" />

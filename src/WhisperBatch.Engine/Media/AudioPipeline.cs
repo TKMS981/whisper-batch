@@ -76,7 +76,7 @@ internal static class AudioPipeline
 /// ファイル全体をメモリに展開しないので、長時間の音声でも使用メモリは読み出し単位分に収まる。
 /// 1 つのタスクの中で順番に使う前提のクラス（スレッドをまたいで同時に使わない）。
 /// </summary>
-internal sealed class AudioSampleReader : IDisposable
+internal sealed class AudioSampleReader : IAudioSampleSource, IDisposable
 {
     public const int SampleRate = 16_000;
 
@@ -113,22 +113,27 @@ internal sealed class AudioSampleReader : IDisposable
     }
 
     /// <summary>最大 <paramref name="maxFrames"/> サンプルを destination[offset..] に読み出す。返る数が少なければ終端に達している。</summary>
-    public int Read(float[] destination, int offset, int maxFrames)
+    public int Read(float[] destination, int offset, int maxFrames, CancellationToken cancellationToken = default)
     {
         var total = 0;
+        // 一度に読む量。長い読み出しの途中でも、中止をすぐに反映できるようにする
+        const int step = SampleRate * 30;
         while (total < maxFrames && !_finished)
         {
-            var wantBytes = (maxFrames - total) * 4;
+            cancellationToken.ThrowIfCancellationRequested();
+            var wantBytes = Math.Min(maxFrames - total, step) * 4;
             if (_bytes.Length < wantBytes) _bytes = new byte[wantBytes];
             int read;
             try
             {
                 read = _resampler.Read(_bytes, 0, wantBytes);
             }
-            catch (COMException e)
+            catch (Exception e) when (e is COMException or IOException or UnauthorizedAccessException)
             {
                 _finished = true;
-                throw new WhisperBatchError.AudioDecodingFailed(_name, MfInterop.Describe(e)).ToException();
+                // 読み込み途中でディスクが外れた場合などは、次の行動が分かるエラーにする
+                throw (ErrorMapper.Map(e, ErrorMapper.Operation.Read(_name))
+                       ?? new WhisperBatchError.AudioDecodingFailed(_name, e is COMException c ? MfInterop.Describe(c) : e.Message)).ToException();
             }
             if (read <= 0)
             {

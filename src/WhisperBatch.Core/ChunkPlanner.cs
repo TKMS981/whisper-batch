@@ -17,14 +17,18 @@ public sealed record ChunkPlanner
     public double MinimumAdvance { get; }
     /// <summary>チャンクの終わりを、末尾からこの秒数の範囲で最も静かな位置（発話の切れ目）に合わせる</summary>
     public double BoundarySearch { get; }
+    /// <summary>静かな位置を探すときの幅（秒）。広いほど、語の途中の短い無音ではなく文の間の無音を選びやすい。</summary>
+    public double SilenceWindow { get; }
 
-    public ChunkPlanner(double chunkDuration = 600, double tailMargin = 5, double? minimumAdvance = null, double boundarySearch = 20)
+    public ChunkPlanner(double chunkDuration = 600, double tailMargin = 5, double? minimumAdvance = null, double boundarySearch = 20,
+                        double silenceWindow = 0.2)
     {
         if (!(chunkDuration > tailMargin && tailMargin >= 0)) throw new ArgumentException("chunkDuration > tailMargin >= 0 が必要です");
         ChunkDuration = chunkDuration;
         TailMargin = tailMargin;
         MinimumAdvance = minimumAdvance ?? chunkDuration / 2;
-        BoundarySearch = Math.Min(boundarySearch, chunkDuration / 3);
+        BoundarySearch = Math.Min(boundarySearch, chunkDuration / 2);
+        SilenceWindow = silenceWindow;
     }
 
     /// <summary>
@@ -39,7 +43,7 @@ public sealed record ChunkPlanner
         var lower = Math.Max(samples.Length - search, 0);
         var upper = samples.Length - guardBand;
         if (upper - lower <= guardBand) return samples.Length;
-        return SilenceFinder.QuietestPoint(samples, lower, upper, (int)(0.2 * sampleRate));
+        return SilenceFinder.QuietestPoint(samples, lower, upper, (int)(SilenceWindow * sampleRate));
     }
 
     /// <param name="Accepted">採用する区間（時刻はチャンク先頭からの相対秒）</param>

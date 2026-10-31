@@ -12,15 +12,6 @@ using static WhisperBatch.Core.Loc;
 
 namespace WhisperBatch.App.ViewModels;
 
-/// <summary>表示言語の設定（文字起こしの言語とは別）</summary>
-public enum LanguagePreference
-{
-    /// <summary>Windows の表示言語に合わせる</summary>
-    System,
-    Japanese,
-    English,
-}
-
 public sealed record Choice<T>(T Value, string Label);
 
 /// <summary>
@@ -37,15 +28,24 @@ public sealed class ChoiceItem<T>(T value, string label) : ObservableObject
     public override string ToString() => Label;
 }
 
-/// <summary>画面全体の状態。状態の更新はすべて UI スレッドで行う。</summary>
+/// <summary>
+/// 画面全体の状態。状態の更新はすべて UI スレッドで行う。
+///
+/// - 設定の保存は <see cref="SettingsStore"/>、キューと一括処理は <see cref="TranscriptionService"/> が受け持つ。
+///   ここでは選択・案内などの画面の状態と、設定変更に伴う画面側の処理を扱う。
+/// </summary>
 public sealed class AppModel : ObservableObject
 {
     private readonly Dispatcher _dispatcher = Dispatcher.CurrentDispatcher;
-    private readonly AppSettings _settings;
+
+    public SettingsStore Settings { get; }
+    public TranscriptionService Transcription { get; }
+    /// <summary>書体とテーマ</summary>
+    public AppearanceSettings Appearance { get; }
 
     // キュー
 
-    public TranscriptionQueue Queue { get; } = new();
+    public TranscriptionQueue Queue => Transcription.Queue;
     public ObservableCollection<QueueItemViewModel> Items { get; } = [];
     private HashSet<Guid> _selection = [];
 
@@ -56,8 +56,8 @@ public sealed class AppModel : ObservableObject
 
     // 処理状態
 
-    public bool IsRunning { get; private set; }
-    public bool IsLoadingModel { get; private set; }
+    public bool IsRunning => Transcription.IsRunning;
+    public bool IsLoadingModel => Transcription.IsLoadingModel;
     public bool IsAddingFiles { get; private set; }
     public BatchOutcome? LastOutcome { get; private set; }
     /// <summary>追加時にスキップしたファイルの案内</summary>
@@ -71,31 +71,24 @@ public sealed class AppModel : ObservableObject
     /// <summary>認識に使う装置の表示（GPU 名など）</summary>
     public string? DeviceText { get; private set; }
 
-    private CancellationTokenSource? _runCts;
-    private Task? _runTask;
-    private readonly Queue<Guid> _probeQueue = new();
-    private bool _probing;
     private readonly Dictionary<Guid, (CancellationTokenSource Cts, Task Task)> _mp3Exports = [];
-    /// <summary>追加直後の確認で読み込めないと分かった項目（次の一括処理の結果に失敗として含める）</summary>
-    private readonly HashSet<Guid> _probeFailedIds = [];
 
-    public AppModel(AppSettings settings)
+    public AppModel(SettingsStore settings)
     {
-        _settings = settings;
-        _language = LanguageOptions.FromStorage(settings.Language);
-        _selectedModelId = ModelCatalog.Model(settings.ModelId)?.Id ?? ModelCatalog.DefaultModelId;
-        _languagePreference = settings.AppLanguage switch
-        {
-            "ja" => LanguagePreference.Japanese,
-            "en" => LanguagePreference.English,
-            _ => LanguagePreference.System,
-        };
-        _showTimestamps = settings.ShowTimestamps;
-        AppLanguage = Resolve(_languagePreference);
+        Settings = settings;
+        Appearance = new AppearanceSettings(settings);
+        Transcription = new TranscriptionService(Models.Storage);
+        AppLanguage = Resolve(settings.LanguagePreference);
         Localizer.Shared.SetLanguage(AppLanguage);
 
         RefreshChoiceLabels();
         Queue.Changed += (_, _) => SyncItems();
+        Transcription.StateChanged += (_, _) => OnAllPropertiesChanged();
+        // Whisper を読み込んだときだけ、実際に使っている装置（GPU を使えたか）を表示に反映する（ReazonSpeech は常に CPU）
+        Transcription.TranscriberLoaded += (_, t) =>
+        {
+            if (t.Model.Engine == SpeechEngine.Whisper) DeviceText = t.GpuName ?? L("model.device.cpu");
+        };
         Models.Changed += (_, _) =>
         {
             RefreshChoiceLabels();
@@ -122,47 +115,111 @@ public sealed class AppModel : ObservableObject
         OnAllPropertiesChanged();
     }
 
-    // 設定（settings.json に保存）
-
-    private LanguageOption _language;
+    // 設定（保存は SettingsStore）
 
     /// <summary>文字起こしの言語</summary>
     public LanguageOption Language
     {
-        get => _language;
+        get => Settings.Language;
         set
         {
-            if (!Set(ref _language, value)) return;
-            _settings.Language = value.Id();
-            _settings.Save();
-        }
-    }
-
-    private string _selectedModelId;
-
-    public string SelectedModelId
-    {
-        get => _selectedModelId;
-        set
-        {
-            if (value is null || !Set(ref _selectedModelId, value)) return;
-            _settings.ModelId = value;
-            _settings.Save();
+            if (Settings.Language == value) return;
+            Settings.Language = value;
             OnAllPropertiesChanged();
         }
     }
 
-    public WhisperModel SelectedModel => ModelCatalog.Model(SelectedModelId) ?? ModelCatalog.DefaultModel;
+    public string? SelectedModelId
+    {
+        get => Settings.SelectedModelId;
+        set
+        {
+            // 一覧を差し替えたときにコンボボックスが null を書き戻してくるので無視する
+            if (value is null || Settings.SelectedModelId == value) return;
+            var engine = SelectedEngine;
+            Settings.SelectedModelId = value;
+            OnAllPropertiesChanged();
+            if (SelectedEngine != engine) ReapplySelections();
+        }
+    }
 
-    private LanguagePreference _languagePreference;
+    /// <summary>
+    /// 方式を切り替えると、モデルと言語の選択肢の一覧が差し替わり、コンボボックスの選択が外れる。
+    /// 一覧の差し替えが画面に反映された後で、選んでいる値を読み直させる。
+    /// </summary>
+    private void ReapplySelections() => _dispatcher.BeginInvoke(() =>
+    {
+        OnPropertyChanged(nameof(SelectedModelChoice));
+        OnPropertyChanged(nameof(LanguageSelection));
+    }, DispatcherPriority.Background);
+
+    /// <summary>モデルの選択欄に表示する項目（一覧が差し替わっても選び直せるよう、項目そのものを結び付ける）</summary>
+    public ChoiceItem<string>? SelectedModelChoice
+    {
+        get => ModelChoices.FirstOrDefault(c => c.Value == SelectedModelId);
+        set
+        {
+            if (value is not null) SelectedModelId = value.Value;
+        }
+    }
+
+    public SpeechModel SelectedModel => Settings.SelectedModel;
+
+    public SpeechEngine SelectedEngine => SelectedModel.Engine;
+
+    /// <summary>実際に使う文字起こしの言語（ReazonSpeech は日本語専用）</summary>
+    public LanguageOption EffectiveLanguage =>
+        SelectedEngine.Supports(Language) ? Language : SelectedEngine.LanguageOptions().FirstOrDefault(Language);
+
+    /// <summary>言語を選べない方式か（ReazonSpeech は日本語に固定して表示する）</summary>
+    public bool IsLanguageFixed => SelectedEngine.LanguageOptions().Count == 1;
+
+    /// <summary>言語の選択欄に表示する値（固定のときは選んだ値を変えない）</summary>
+    public LanguageOption? LanguageSelection
+    {
+        get => EffectiveLanguage;
+        set
+        {
+            // 一覧を差し替えたときにコンボボックスが null を書き戻してくるので無視する
+            if (value is { } v && !IsLanguageFixed) Language = v;
+        }
+    }
+
+    public string? LanguageHelp => IsLanguageFixed ? L("settings.language.japaneseOnly") : null;
+
+    /// <summary>方式を切り替える。前にその方式で選んでいたモデル、なければ取得済みのモデル、なければ既定のモデルにする。</summary>
+    public void SelectEngine(SpeechEngine engine)
+    {
+        if (engine == SelectedEngine || IsRunning) return;
+        var installed = Models.InstalledModels(engine);
+        var model = Settings.LastSelectedModel(engine)
+            ?? installed.FirstOrDefault(m => m.IsDefaultForEngine)
+            ?? installed.FirstOrDefault()
+            ?? ModelCatalog.DefaultModelFor(engine);
+        SelectedModelId = model.Id;
+    }
+
+    /// <summary>方式の選択欄用</summary>
+    public SpeechEngine EngineSelection
+    {
+        get => SelectedEngine;
+        set => SelectEngine(value);
+    }
+
+    public IReadOnlyList<ChoiceItem<SpeechEngine>> EngineChoices { get; } =
+        SpeechEngines.All.Select(e => new ChoiceItem<SpeechEngine>(e, "")).ToList();
+
+    /// <summary>言語を変えられるか（処理中と、言語が 1 つしかない方式では変えられない）</summary>
+    public bool CanChangeLanguage => !IsRunning && !IsLanguageFixed;
 
     /// <summary>表示言語の設定。変えると画面の文字列がすぐに切り替わる。</summary>
     public LanguagePreference LanguagePreference
     {
-        get => _languagePreference;
+        get => Settings.LanguagePreference;
         set
         {
-            if (!Set(ref _languagePreference, value)) return;
+            if (Settings.LanguagePreference == value) return;
+            Settings.LanguagePreference = value;
             ApplyLanguagePreference();
         }
     }
@@ -170,37 +227,47 @@ public sealed class AppModel : ObservableObject
     /// <summary>現在の表示言語</summary>
     public AppLanguage AppLanguage { get; private set; }
 
-    private bool _showTimestamps;
-
     public bool ShowTimestamps
     {
-        get => _showTimestamps;
+        get => Settings.ShowTimestamps;
         set
         {
-            if (!Set(ref _showTimestamps, value)) return;
-            _settings.ShowTimestamps = value;
-            _settings.Save();
+            if (Settings.ShowTimestamps == value) return;
+            Settings.ShowTimestamps = value;
+            OnPropertyChanged();
             OnPropertyChanged(nameof(DetailText));
         }
     }
 
-    public static AppLanguage Resolve(LanguagePreference preference) => preference switch
+    /// <summary>ファイルを追加したらすぐに文字起こしを始める（既定はオフ）</summary>
+    public bool AutoStartOnAdd
     {
-        LanguagePreference.Japanese => AppLanguage.Japanese,
-        LanguagePreference.English => AppLanguage.English,
-        _ => AppLanguageInfo.Preferred(SystemLanguages.Preferred),
-    };
+        get => Settings.AutoStartOnAdd;
+        set
+        {
+            if (Settings.AutoStartOnAdd == value) return;
+            Settings.AutoStartOnAdd = value;
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>Whisper の探索方式（速度優先／精度優先）。処理中に変えた場合は、次の開始から反映する。</summary>
+    public WhisperDecoding WhisperDecoding
+    {
+        get => Settings.WhisperDecoding;
+        set
+        {
+            if (Settings.WhisperDecoding == value) return;
+            Settings.WhisperDecoding = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public static AppLanguage Resolve(LanguagePreference preference) => preference.Resolve(SystemLanguages.Preferred);
 
     private void ApplyLanguagePreference()
     {
-        _settings.AppLanguage = _languagePreference switch
-        {
-            LanguagePreference.Japanese => "ja",
-            LanguagePreference.English => "en",
-            _ => "system",
-        };
-        _settings.Save();
-        AppLanguage = Resolve(_languagePreference);
+        AppLanguage = Resolve(LanguagePreference);
         Localizer.Shared.SetLanguage(AppLanguage);
         // 文字列として保持している案内は前の言語のままなので消す
         AddNotice = null;
@@ -212,21 +279,30 @@ public sealed class AppModel : ObservableObject
         OnAllPropertiesChanged();
     }
 
-    public IReadOnlyList<ChoiceItem<LanguageOption>> LanguageChoices { get; } =
-        LanguageOptions.All.Select(o => new ChoiceItem<LanguageOption>(o, "")).ToList();
+    // 選択肢。一覧を作り直すとコンボボックスの選択が外れるので、方式ごとの一覧を 1 回だけ作り、表示名だけを更新する。
 
-    public IReadOnlyList<ChoiceItem<string>> ModelChoices { get; } =
-        ModelCatalog.All.Select(m => new ChoiceItem<string>(m.Id, "")).ToList();
+    private readonly Dictionary<SpeechEngine, IReadOnlyList<ChoiceItem<LanguageOption>>> _languageChoices =
+        SpeechEngines.All.ToDictionary(e => e, e => (IReadOnlyList<ChoiceItem<LanguageOption>>)e.LanguageOptions().Select(o => new ChoiceItem<LanguageOption>(o, "")).ToList());
+
+    private readonly Dictionary<SpeechEngine, IReadOnlyList<ChoiceItem<string>>> _modelChoices =
+        SpeechEngines.All.ToDictionary(e => e, e => (IReadOnlyList<ChoiceItem<string>>)ModelCatalog.Models(e).Select(m => new ChoiceItem<string>(m.Id, "")).ToList());
+
+    /// <summary>選んでいる方式で選べる言語</summary>
+    public IReadOnlyList<ChoiceItem<LanguageOption>> LanguageChoices => _languageChoices[SelectedEngine];
+
+    /// <summary>選んでいる方式のモデル（サイズ）</summary>
+    public IReadOnlyList<ChoiceItem<string>> ModelChoices => _modelChoices[SelectedEngine];
 
     /// <summary>選択肢の表示名を、表示言語とモデルの取得状況に合わせて更新する</summary>
     private void RefreshChoiceLabels()
     {
-        foreach (var c in LanguageChoices) c.Label = c.Value.DisplayName();
-        foreach (var c in ModelChoices)
+        foreach (var c in _languageChoices.Values.SelectMany(l => l)) c.Label = c.Value.DisplayName();
+        foreach (var c in EngineChoices) c.Label = c.Value.DisplayName();
+        foreach (var c in _modelChoices.Values.SelectMany(l => l))
         {
             var m = ModelCatalog.Model(c.Value)!;
             var mark = Models.IsInstalled(m) ? "✓ " : "";
-            var name = m.Id == ModelCatalog.DefaultModelId ? L("model.recommendedName", m.DisplayName) : m.DisplayName;
+            var name = m.IsDefaultForEngine ? L("model.recommendedName", m.DisplayName) : m.DisplayName;
             c.Label = $"{mark}{name} — {m.SizeText}";
         }
     }
@@ -253,7 +329,8 @@ public sealed class AppModel : ObservableObject
         get
         {
             if (IsRunning) return L("start.block.running");
-            if (NativeError is not null) return NativeError;
+            // whisper.cpp の DLL が読めなくても、ReazonSpeech は使える
+            if (NativeError is not null && SelectedEngine == SpeechEngine.Whisper) return NativeError;
             if (Queue.Items.Count == 0) return L("start.block.empty");
             if (!Queue.HasPending) return L("start.block.noPending");
             if (!Models.IsInstalled(SelectedModel)) return L("start.block.noModel");
@@ -267,7 +344,8 @@ public sealed class AppModel : ObservableObject
     public string FormatsText => L("queue.empty.formats", AudioFormats.Summary);
 
     /// <summary>設定パネルに表示する開始できない理由（処理中・キューが空のときは出さない）</summary>
-    public string? VisibleBlockReason => !IsRunning && Queue.Items.Count > 0 ? StartBlockReason : NativeError;
+    public string? VisibleBlockReason =>
+        !IsRunning && Queue.Items.Count > 0 ? StartBlockReason : SelectedEngine == SpeechEngine.Whisper ? NativeError : null;
 
     public bool HasCompletedItems => Queue.CompletedItems.Count > 0;
     public bool IsQueueEmpty => Queue.Items.Count == 0;
@@ -276,14 +354,18 @@ public sealed class AppModel : ObservableObject
     public bool CanRemoveAllPending => Queue.Counts.Pending > 0;
     public bool CanRemoveAll => Queue.Counts.Total != Queue.Counts.Processing;
     public bool CanRetryFailed => Queue.Counts.Failed + Queue.Counts.Cancelled > 0;
+    public bool CanRemoveCompleted => Queue.Counts.Completed > 0;
 
+    /// <summary>キュー下部の「完了 N件を消去」ボタンの文字（完了した項目があるときだけ表示する）</summary>
+    public string ClearCompletedLabel => L("queue.footer.clearCompleted", Queue.Counts.Completed);
+
+    /// <summary>キュー下部の件数。完了の件数は「完了 N件を消去」ボタンに出すので、ここには含めない。</summary>
     public string FooterSummary
     {
         get
         {
             var c = Queue.Counts;
             var parts = new List<string> { L("queue.footer.total", c.Total) };
-            if (c.Completed > 0) parts.Add(L("queue.footer.completed", c.Completed));
             if (c.Failed > 0) parts.Add(L("queue.footer.failed", c.Failed));
             if (c.Pending > 0) parts.Add(L("queue.footer.pending", c.Pending));
             return string.Join(" · ", parts);
@@ -392,6 +474,9 @@ public sealed class AppModel : ObservableObject
 
     public string ModelSizeAndSpace => L("model.sizeAndSpace", SelectedModel.SizeText, SelectedModel.RequiredSpaceText);
 
+    /// <summary>方式の説明（方式の選択欄のツールチップ）</summary>
+    public string EngineSummary => SelectedEngine.Summary();
+
     public double DownloadFraction => Models.StateOf(SelectedModel) is ModelManager.State.Downloading d && d.Total > 0 ? (double)d.Received / d.Total : 0;
 
     public string DownloadText => Models.StateOf(SelectedModel) is ModelManager.State.Downloading d
@@ -404,7 +489,10 @@ public sealed class AppModel : ObservableObject
 
     public string ModelRetryLabel => Models.StateOf(SelectedModel) is ModelManager.State.Failed { CanResume: true } ? L("model.resume") : L("model.retry");
 
-    public string DeviceLine => DeviceText is null ? "" : L("model.device", DeviceText);
+    /// <summary>認識に使う装置。ReazonSpeech は CPU で処理する。</summary>
+    public string DeviceLine => SelectedEngine == SpeechEngine.ReazonSpeech
+        ? L("model.device", L("model.device.cpuEngine"))
+        : DeviceText is null ? "" : L("model.device", DeviceText);
 
     // 追加・削除
 
@@ -428,7 +516,7 @@ public sealed class AppModel : ObservableObject
         {
             IsAddingFiles = false;
         }
-        var report = Queue.Add(candidates);
+        var report = Transcription.Add(candidates);
         AddNotice = report.SkippedSummary;
         if (candidates.Count == 0) AddNotice = L("add.noneFound");
         if (report.Added.Count > 0)
@@ -441,8 +529,23 @@ public sealed class AppModel : ObservableObject
             // 重複だけだった場合は、既にある項目を選択して場所を示す
             RequestSelection(report.ExistingIdsForDuplicates);
         }
+        if (AutoStartOnAdd && report.Added.Count > 0) StartAutomatically();
         OnAllPropertiesChanged();
-        EnqueueProbe(report.Added);
+    }
+
+    /// <summary>追加と同時に開始する設定のとき。処理中なら追加分も今の処理の続きで扱われる。</summary>
+    private void StartAutomatically()
+    {
+        if (IsRunning) return;
+        if (CanStart)
+        {
+            Start();
+        }
+        else if (StartBlockReason is { } reason)
+        {
+            var notice = L("autoStart.blocked", reason);
+            AddNotice = AddNotice is null ? notice : AddNotice + "\n" + notice;
+        }
     }
 
     public void RemoveSelected()
@@ -474,11 +577,22 @@ public sealed class AppModel : ObservableObject
         OnAllPropertiesChanged();
     }
 
+    /// <summary>完了した項目をまとめて削除する（保存し終えた結果を片付ける）</summary>
+    public void RemoveCompleted()
+    {
+        Queue.RemoveAllCompleted();
+        PruneSelection();
+        if (Queue.Items.Count == 0)
+        {
+            LastOutcome = null;
+            AddNotice = null;
+        }
+        OnAllPropertiesChanged();
+    }
+
     public void Retry(IEnumerable<Guid> ids)
     {
-        var set = ids.ToHashSet();
-        _probeFailedIds.ExceptWith(set);
-        if (Queue.ResetForRetry(set) > 0) LastOutcome = null;
+        if (Transcription.Retry(ids) > 0) LastOutcome = null;
         OnAllPropertiesChanged();
     }
 
@@ -574,62 +688,21 @@ public sealed class AppModel : ObservableObject
 
     public string DropStripText => IsDropTargeted ? L("queue.dropStrip.targeted") : L("queue.dropStrip");
 
-    // 長さと種類の確認（読み込めない形式を早めに知らせる）
-
-    private void EnqueueProbe(IEnumerable<Guid> ids)
-    {
-        foreach (var id in ids) _probeQueue.Enqueue(id);
-        if (_probing) return;
-        _probing = true;
-        _ = RunProbes();
-
-        async Task RunProbes()
-        {
-            try
-            {
-                while (_probeQueue.TryDequeue(out var id))
-                {
-                    if (Queue.Item(id) is not { Status.IsPending: true } item) continue;
-                    try
-                    {
-                        var info = await MediaInspector.InspectAsync(item.Path);
-                        Queue.SetDuration(id, info.Duration > 0 ? info.Duration : null);
-                        Queue.SetMediaKind(id, info.Kind);
-                    }
-                    catch (Exception e)
-                    {
-                        // 処理が既に始まっていればそちらの結果に任せる
-                        if (Queue.Item(id)?.Status.IsPending == true)
-                        {
-                            try { Queue.MarkFailed(id, ItemFailure.From(e)); } catch (WhisperBatchException) { }
-                            _probeFailedIds.Add(id);
-                        }
-                    }
-                }
-            }
-            finally
-            {
-                _probing = false;
-            }
-        }
-    }
-
-    // 一括処理
+    // 一括処理（処理そのものは TranscriptionService）
 
     public void Start()
     {
         if (!CanStart) return;
-        var model = SelectedModel;
-        if (Models.FilePath(model) is not { } modelPath) return;
         LastOutcome = null;
         LastSaveMessage = null;
-        IsRunning = true;
-        _runCts = new CancellationTokenSource();
+        Transcription.Start(SelectedModel, EffectiveLanguage, WhisperDecoding, outcome =>
+        {
+            if (outcome is not null) LastOutcome = outcome;
+        });
         OnAllPropertiesChanged();
-        _runTask = RunBatchAsync(model, modelPath, Language, _runCts.Token);
     }
 
-    public void Cancel() => _runCts?.Cancel();
+    public void Cancel() => Transcription.Cancel();
 
     public bool HasActiveWork => IsRunning || _mp3Exports.Count > 0;
 
@@ -637,125 +710,12 @@ public sealed class AppModel : ObservableObject
     public async Task ShutdownAsync()
     {
         Models.CancelAllDownloads();
-        _runCts?.Cancel();
+        Transcription.Cancel();
         foreach (var (cts, _) in _mp3Exports.Values) cts.Cancel();
-        if (_runTask is not null) await _runTask;
+        await Transcription.WaitUntilFinishedAsync();
         foreach (var (_, task) in _mp3Exports.Values.ToList()) await task;
         ConversionWorkspace.RemoveLeftovers();
     }
-
-    private async Task RunBatchAsync(WhisperModel model, string modelPath, LanguageOption language, CancellationToken token)
-    {
-        try
-        {
-            IsLoadingModel = true;
-            OnAllPropertiesChanged();
-            WhisperContext context;
-            try
-            {
-                context = await WhisperContext.LoadAsync(model, modelPath);
-            }
-            catch (Exception e)
-            {
-                LastOutcome = new BatchOutcome.CouldNotStart(ItemFailure.From(e));
-                return;
-            }
-            DeviceText = context.UsesGpu ? context.Device.Description : L("model.device.cpu");
-            IsLoadingModel = false;
-            OnAllPropertiesChanged();
-
-            try
-            {
-                var options = new TranscriptionOptions(language);
-                int succeeded = 0, failed = 0;
-                var cancelled = false;
-                while (Queue.NextPendingId is { } id)
-                {
-                    if (token.IsCancellationRequested) { cancelled = true; break; }
-                    if (Queue.Item(id) is not { } item) continue;
-                    try
-                    {
-                        Queue.MarkProcessing(id, item.IsVideo ? ProcessingPhase.Converting : ProcessingPhase.Transcribing);
-                    }
-                    catch (WhisperBatchException)
-                    {
-                        continue;
-                    }
-                    try
-                    {
-                        var transcript = await ProcessAsync(item, context, options, token);
-                        Queue.MarkCompleted(id, transcript);
-                        succeeded++;
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        try { Queue.MarkCancelled(id); } catch (WhisperBatchException) { }
-                        cancelled = true;
-                        break;
-                    }
-                    catch (Exception e)
-                    {
-                        // 1 件の失敗では止めず、次のファイルへ進む
-                        try { Queue.MarkFailed(id, ItemFailure.From(e)); } catch (WhisperBatchException) { }
-                        failed++;
-                    }
-                }
-                // 追加時点で読み込めなかった項目も、この回の失敗として数える
-                failed += _probeFailedIds.Count(i => Queue.Item(i)?.Status.IsFailed == true);
-                _probeFailedIds.Clear();
-                if (succeeded + failed > 0 || cancelled)
-                {
-                    LastOutcome = BatchOutcome.Make(succeeded, failed, cancelled, Queue.Counts.Pending);
-                }
-            }
-            finally
-            {
-                // GPU のメモリを解放する（処理中の呼び出しが終わってから）
-                await Task.Run(context.Dispose);
-            }
-        }
-        finally
-        {
-            IsRunning = false;
-            IsLoadingModel = false;
-            _runCts?.Dispose();
-            _runCts = null;
-            _runTask = null;
-            OnAllPropertiesChanged();
-        }
-    }
-
-    /// <summary>1 件分の処理。動画は音声を一時 MP3 に変換してから文字起こしし、一時ファイルは必ず削除する。</summary>
-    private async Task<Transcript> ProcessAsync(QueueItem item, WhisperContext context, TranscriptionOptions options, CancellationToken token)
-    {
-        var id = item.Id;
-        // 追加直後の確認が終わっていない場合もあるので、ここで種類を確かめる
-        var info = await MediaInspector.InspectAsync(item.Path, token);
-        Queue.SetMediaKind(id, info.Kind);
-        if (info.Duration > 0) Queue.SetDuration(id, info.Duration);
-
-        if (info.Kind != MediaKind.Video)
-        {
-            Queue.SetPhase(id, ProcessingPhase.Transcribing);
-            return await TranscribeAsync(item.Path, id, context, options, token);
-        }
-
-        Queue.SetPhase(id, ProcessingPhase.Converting);
-        var mp3 = ConversionWorkspace.MakeTemporaryMp3Path();
-        try
-        {
-            await Mp3Converter.ConvertAsync(item.Path, mp3, p => Post(() => Queue.UpdateProgress(id, ProcessingPhase.Converting, p)), token);
-            Queue.SetPhase(id, ProcessingPhase.Transcribing);
-            return await TranscribeAsync(mp3, id, context, options, token);
-        }
-        finally
-        {
-            ConversionWorkspace.Remove(mp3);
-        }
-    }
-
-    private Task<Transcript> TranscribeAsync(string path, Guid id, WhisperContext context, TranscriptionOptions options, CancellationToken token) =>
-        TranscriptionEngine.TranscribeAsync(path, context, options, p => Post(() => Queue.UpdateProgress(id, ProcessingPhase.Transcribing, p)), token);
 
     private void Post(Action action) => _dispatcher.BeginInvoke(action, DispatcherPriority.Background);
 
@@ -779,11 +739,12 @@ public sealed class AppModel : ObservableObject
             try
             {
                 temp = ConversionWorkspace.MakeTemporaryMp3Path();
+                // 一時フォルダと保存先の両方に空きがあるかを、変換を始める前に確かめる
                 await Mp3Converter.ConvertAsync(item.Path, temp, p => Post(() =>
                 {
                     var current = Items.FirstOrDefault(v => v.Id == id);
                     if (current?.Mp3Progress is { } old && p > old) current.SetMp3Progress(p);
-                }), cts.Token);
+                }), cts.Token, [Path.GetDirectoryName(destination)!]);
                 var t = temp;
                 await Task.Run(() => ExportService.MoveIntoPlace(t, destination));
                 temp = null;
@@ -795,7 +756,7 @@ public sealed class AppModel : ObservableObject
             }
             catch (Exception e)
             {
-                Dialogs.Show(L("mp3.failed.title"), ErrorMessages.UserFacing(e), error: true);
+                Dialogs.Show(L("mp3.failed.title"), ErrorMessages.UserFacing(e, ErrorMapper.Operation.Write(Path.GetFileName(destination))), error: true);
             }
             finally
             {

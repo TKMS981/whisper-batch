@@ -6,7 +6,7 @@
         x:Name="Root"
         Title="Whisper Batch"
         Width="1080" Height="720" MinWidth="720" MinHeight="500"
-        FontFamily="{StaticResource AppFont}"
+        FontFamily="{DynamicResource AppFont}" FontSize="{DynamicResource Size.14}"
         AllowDrop="True"
         Icon="/AppIcon.ico">
     <Window.Resources>
@@ -31,6 +31,9 @@
     </Window.InputBindings>
 
     <Grid>
+        <!-- 設定の「テーマ」で選んだ背景（色・画像）。標準のときは何も描かない -->
+        <v:ThemeBackgroundView x:Name="ThemeLayer" />
+
         <DockPanel>
             <!-- メニューとツールバー -->
             <Grid DockPanel.Dock="Top" Background="{DynamicResource LayerFillColorAltBrush}">
@@ -109,9 +112,9 @@
                                 </VisualBrush>
                             </Border.BorderBrush>
                             <StackPanel VerticalAlignment="Center" Margin="20">
-                                <TextBlock Text="&#xE8D6;" Style="{StaticResource Icon}" FontSize="40" HorizontalAlignment="Center"
+                                <TextBlock Text="&#xE8D6;" Style="{StaticResource Icon}" FontSize="{DynamicResource Size.40}" HorizontalAlignment="Center"
                                            Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,0,0,14" />
-                                <TextBlock Text="{l:L queue.empty.title}" FontSize="17" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                                <TextBlock Text="{l:L queue.empty.title}" FontSize="{DynamicResource Size.17}" FontWeight="SemiBold" HorizontalAlignment="Center" />
                                 <TextBlock Text="{l:L queue.empty.message}" Style="{StaticResource Secondary}" TextAlignment="Center" Margin="0,8,0,14" />
                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                                     <Button Content="{l:L action.addFilesEllipsis}" Command="{Binding AddFilesCommand}" Style="{DynamicResource AccentButtonStyle}" Padding="16,6" />
@@ -149,31 +152,41 @@
                                                Foreground="{DynamicResource SystemFillColorCautionBrush}" />
                                     <Button DockPanel.Dock="Right" Click="OnDismissNotice" Padding="4" VerticalAlignment="Top" Background="Transparent" BorderThickness="0"
                                             AutomationProperties.Name="{l:L notice.close}" ToolTip="{l:L notice.close}">
-                                        <TextBlock Text="&#xE711;" Style="{StaticResource Icon}" FontSize="10" />
+                                        <TextBlock Text="&#xE711;" Style="{StaticResource Icon}" FontSize="{DynamicResource Size.10}" />
                                     </Button>
-                                    <TextBox Text="{Binding Model.AddNotice, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" FontSize="12"
+                                    <TextBox Text="{Binding Model.AddNotice, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" FontSize="{DynamicResource Size.12}"
                                              BorderThickness="0" Background="Transparent" Padding="0" MaxHeight="110" VerticalScrollBarVisibility="Auto" />
                                 </DockPanel>
                             </Border>
 
                             <!-- 下部: 削除・一括操作・件数 -->
                             <Border DockPanel.Dock="Bottom" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}" Padding="8,4">
-                                <DockPanel>
+                                <DockPanel MinHeight="30">
                                     <Button DockPanel.Dock="Left" Click="OnRemoveSelected" IsEnabled="{Binding Model.CanRemoveSelected}" Padding="8,4"
                                             ToolTip="{l:L queue.footer.remove.help}" AutomationProperties.Name="{l:L queue.footer.remove}">
-                                        <TextBlock Text="&#xE738;" Style="{StaticResource Icon}" FontSize="12" />
+                                        <TextBlock Text="&#xE738;" Style="{StaticResource Icon}" FontSize="{DynamicResource Size.12}" />
                                     </Button>
                                     <Button x:Name="QueueMenuButton" DockPanel.Dock="Left" Click="OnQueueMenu" Padding="8,4" Margin="4,0,0,0"
                                             AutomationProperties.Name="{l:L queue.footer.menu}" ToolTip="{l:L queue.footer.menu}">
-                                        <TextBlock Text="&#xE712;" Style="{StaticResource Icon}" FontSize="12" />
+                                        <TextBlock Text="&#xE712;" Style="{StaticResource Icon}" FontSize="{DynamicResource Size.12}" />
                                         <Button.ContextMenu>
                                             <ContextMenu>
+                                                <MenuItem Header="{l:L queue.footer.removeCompleted}" Click="OnRemoveCompleted" IsEnabled="{Binding Model.CanRemoveCompleted}" />
                                                 <MenuItem Header="{l:L queue.footer.removePending}" Click="OnRemovePending" IsEnabled="{Binding Model.CanRemoveAllPending}" />
                                                 <MenuItem Header="{l:L queue.footer.removeAll}" Click="OnRemoveAll" IsEnabled="{Binding Model.CanRemoveAll}" />
                                                 <Separator />
                                                 <MenuItem Header="{l:L queue.footer.retryFailed}" Click="OnRetryFailed" IsEnabled="{Binding Model.CanRetryFailed}" />
                                             </ContextMenu>
                                         </Button.ContextMenu>
+                                    </Button>
+                                    <!-- 完了した項目があるときだけ表示する（フェードで出入り）。完了の件数はこのボタンに出すので、左の件数表示には含めない -->
+                                    <Button DockPanel.Dock="Right" Click="OnRemoveCompleted" Style="{StaticResource SmallButton}" Margin="6,0,0,0"
+                                            Visibility="Collapsed" Opacity="0" l:Motion.FadeVisible="{Binding Model.CanRemoveCompleted}"
+                                            ToolTip="{l:L queue.footer.clearCompleted.help}" AutomationProperties.Name="{Binding Model.ClearCompletedLabel}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="&#xE73E;" Style="{StaticResource ButtonGlyph}" FontSize="{DynamicResource Size.12}" Margin="0,0,6,0" />
+                                            <TextBlock Text="{Binding Model.ClearCompletedLabel}" />
+                                        </StackPanel>
                                     </Button>
                                     <TextBlock Text="{Binding Model.FooterSummary}" Style="{StaticResource Caption}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
                                                HorizontalAlignment="Right" VerticalAlignment="Center" Margin="8,0,4,0" />
@@ -205,7 +218,7 @@
                                             <v:StatusIcon Grid.Column="0" VerticalAlignment="Top" Margin="0,2,0,0" />
                                             <StackPanel Grid.Column="1" Margin="4,0,0,0">
                                                 <DockPanel>
-                                                    <TextBlock DockPanel.Dock="Right" Text="&#xE714;" Style="{StaticResource Icon}" FontSize="12" Margin="6,0,0,0"
+                                                    <TextBlock DockPanel.Dock="Right" Text="&#xE714;" Style="{StaticResource Icon}" FontSize="{DynamicResource Size.12}" Margin="6,0,0,0"
                                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}" ToolTip="{l:L queue.row.video.help}"
                                                                Visibility="{Binding IsVideo, Converter={StaticResource Visible}}" />
                                                     <TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" />
@@ -251,8 +264,8 @@
             <Border HorizontalAlignment="Center" VerticalAlignment="Center" CornerRadius="22" Padding="18,12"
                     Background="{DynamicResource AccentFillColorDefaultBrush}">
                 <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="&#xE896;" Style="{StaticResource Icon}" FontSize="18" Margin="0,0,10,0" Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
-                    <TextBlock Text="{l:L drop.overlay}" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+                    <TextBlock Text="&#xE896;" Style="{StaticResource Icon}" FontSize="{DynamicResource Size.18}" Margin="0,0,10,0" Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+                    <TextBlock Text="{l:L drop.overlay}" FontSize="{DynamicResource Size.16}" FontWeight="SemiBold" Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
                 </StackPanel>
             </Border>
         </Grid>

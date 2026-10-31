@@ -6,7 +6,7 @@
              AutomationProperties.Name="{Binding StatusLabel}">
     <!-- アイコンは常に置いておき、完了・失敗時に 1 回弾ませる（処理中は隠してスピナーを重ねる） -->
     <Grid>
-        <TextBlock x:Name="Glyph" Text="{Binding StatusGlyph}" Style="{StaticResource Icon}" FontSize="15"
+        <TextBlock x:Name="Glyph" Text="{Binding StatusGlyph}" Style="{StaticResource Icon}" FontSize="{DynamicResource Size.15}"
                    HorizontalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                    l:Motion.BounceKey="{Binding BounceKey}"
                    Visibility="{Binding IsProcessing, Converter={StaticResource NotVisible}}" />

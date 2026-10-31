@@ -272,10 +272,51 @@ public class ModelCatalogTests
         Assert.Equal(ModelCatalog.All.Count, ModelCatalog.All.Select(m => m.Id).Distinct().Count());
         foreach (var m in ModelCatalog.All)
         {
-            Assert.Equal(64, m.Sha256.Length);
+            Assert.NotEmpty(m.Files);
             Assert.True(m.RequiredFreeSpace > m.SizeBytes);
-            Assert.EndsWith(m.FileName, m.DownloadUrl.AbsoluteUri);
+            Assert.Equal(m.Files.Count, m.Files.Select(f => f.Name).Distinct().Count());
+            foreach (var f in m.Files)
+            {
+                Assert.Matches("^[0-9a-f]{64}$", f.Sha256);
+                Assert.EndsWith("/" + f.Name, f.Url.AbsoluteUri);
+                // main ではなく、固定したコミットから取得する
+                Assert.DoesNotContain("/resolve/main/", f.Url.AbsoluteUri);
+                Assert.Matches("/resolve/[0-9a-f]{40}/", f.Url.AbsoluteUri);
+                Assert.Equal("https", f.Url.Scheme);
+                Assert.Equal("huggingface.co", f.Url.Host);
+            }
         }
+    }
+
+    /// <summary>方式ごとのモデル・既定のモデル・言語</summary>
+    [Fact]
+    public void EnginesHaveModelsAndDefaults()
+    {
+        foreach (var engine in SpeechEngines.All)
+        {
+            Assert.NotEmpty(ModelCatalog.Models(engine));
+            var d = ModelCatalog.DefaultModelFor(engine);
+            Assert.Equal(engine, d.Engine);
+            Assert.True(d.IsDefaultForEngine);
+            Assert.NotEmpty(engine.LanguageOptions());
+            Assert.Equal(engine, SpeechEngines.FromStorage(engine.RawValue()));
+        }
+        Assert.Equal([LanguageOption.Japanese], SpeechEngine.ReazonSpeech.LanguageOptions());
+        Assert.Equal(LanguageOptions.All, SpeechEngine.Whisper.LanguageOptions());
+        // ReazonSpeech は 4 ファイルをモデルごとのフォルダに置く
+        var reazon = ModelCatalog.Model("reazonspeech-k2-v2-int8")!;
+        Assert.Equal(4, reazon.Files.Count);
+        Assert.Equal("reazonspeech-k2-v2-int8", reazon.Folder);
+        Assert.Equal(160_372_200, reazon.SizeBytes);
+        // Whisper は以前の版と同じく保存先の直下
+        Assert.Null(ModelCatalog.DefaultModel.Folder);
+    }
+
+    [Fact]
+    public void DecodingStorageRoundTrip()
+    {
+        foreach (var d in WhisperDecodings.All) Assert.Equal(d, WhisperDecodings.FromStorage(d.RawValue()));
+        Assert.Equal(WhisperDecoding.BeamSearch, WhisperDecodings.FromStorage(null));
     }
 
     [Fact]
@@ -349,6 +390,11 @@ public partial class LocalizationTests
         {
             used.Add($"model.{model.Id}.name");
             used.Add($"model.{model.Id}.summary");
+        }
+        foreach (var engine in SpeechEngines.All)
+        {
+            foreach (var part in new[] { "name", "summary", "source" }) used.Add($"engine.{engine.RawValue()}.{part}");
+            used.Add($"models.message.{engine.RawValue()}");
         }
         Assert.Empty(used.Except(Ja.Keys).Order());
         Assert.Empty(used.Except(En.Keys).Order());

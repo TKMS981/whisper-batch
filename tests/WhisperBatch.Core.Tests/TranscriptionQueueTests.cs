@@ -286,6 +286,23 @@ public class QueueRemoveTests
         Assert.Equal([ids[1]], q.Items.Select(i => i.Id));
     }
 
+    /// <summary>「完了 N件を消去」: 完了した項目だけを消し、待機中・処理中・失敗した項目は残す</summary>
+    [Fact]
+    public void RemoveAllCompletedKeepsOthers()
+    {
+        var q = new TranscriptionQueue();
+        q.Add([QueueAddTests.Candidate(@"C:\tmp\a.wav"), QueueAddTests.Candidate(@"C:\tmp\b.wav"), QueueAddTests.Candidate(@"C:\tmp\c.wav"), QueueAddTests.Candidate(@"C:\tmp\d.wav")]);
+        var ids = q.Items.Select(i => i.Id).ToList();
+        q.MarkProcessing(ids[0]);
+        q.MarkCompleted(ids[0], new Transcript([], "ja"));
+        q.MarkFailed(ids[1], ItemFailure.From(new WhisperBatchError.NothingToExport()));
+        q.MarkProcessing(ids[2]);
+        Assert.Equal(1, q.RemoveAllCompleted());
+        Assert.Equal([ids[1], ids[2], ids[3]], q.Items.Select(i => i.Id));
+        Assert.Equal(0, q.RemoveAllCompleted());
+        Assert.Equal(0, q.Counts.Completed);
+    }
+
     [Fact]
     public void RemovedFileCanBeAddedAgain()
     {

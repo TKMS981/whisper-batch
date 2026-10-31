@@ -18,18 +18,21 @@ public sealed class ModelStorage(string directory)
 
     public void EnsureDirectory() => Directory.CreateDirectory(DirectoryPath);
 
-    public string FilePath(WhisperModel model) => Path.Combine(DirectoryPath, model.FileName);
+    /// <summary>モデルのファイルを置くフォルダ（Whisper は保存先の直下、ReazonSpeech はモデルごとのフォルダ）</summary>
+    public string DirectoryFor(SpeechModel model) => model.Folder is { } folder ? Path.Combine(DirectoryPath, folder) : DirectoryPath;
+
+    public string FilePath(ModelFile file, SpeechModel model) => Path.Combine(DirectoryFor(model), file.Name);
 
     /// <summary>検証前のダウンロード途中のファイル</summary>
-    internal string PartialPath(WhisperModel model) => Path.Combine(DirectoryPath, model.FileName + ".download");
+    internal string PartialPath(ModelFile file, SpeechModel model) => Path.Combine(DirectoryFor(model), file.Name + ".download");
 
-    /// <summary>取得済みか（ファイルがあり、サイズが一致する）。内容の検証はダウンロード直後に SHA-256 で行う。</summary>
-    public bool IsInstalled(WhisperModel model)
+    /// <summary>ファイルが揃っているか（あり、サイズが一致する）。内容の検証はダウンロード直後に SHA-256 で行う。</summary>
+    public bool IsInstalled(ModelFile file, SpeechModel model)
     {
         try
         {
-            var info = new FileInfo(FilePath(model));
-            return info.Exists && info.Length == model.SizeBytes;
+            var info = new FileInfo(FilePath(file, model));
+            return info.Exists && info.Length == file.SizeBytes;
         }
         catch (Exception)
         {
@@ -37,27 +40,35 @@ public sealed class ModelStorage(string directory)
         }
     }
 
-    public void Delete(WhisperModel model)
+    /// <summary>モデルのファイルがすべて揃っているか</summary>
+    public bool IsInstalled(SpeechModel model) => model.Files.Count > 0 && model.Files.All(f => IsInstalled(f, model));
+
+    public void Delete(SpeechModel model)
     {
-        foreach (var path in new[] { FilePath(model), PartialPath(model) })
+        foreach (var file in model.Files)
         {
-            if (File.Exists(path)) File.Delete(path);
+            foreach (var path in new[] { FilePath(file, model), PartialPath(file, model) })
+            {
+                if (File.Exists(path)) File.Delete(path);
+            }
+        }
+        // モデル専用のフォルダが空になったら消す
+        if (model.Folder is not null)
+        {
+            var dir = DirectoryFor(model);
+            try
+            {
+                if (Directory.Exists(dir) && !Directory.EnumerateFileSystemEntries(dir).Any()) Directory.Delete(dir);
+            }
+            catch (Exception)
+            {
+                // 残っても動作には影響しない
+            }
         }
     }
 
     /// <summary>保存先ボリュームの空き容量</summary>
-    public long? AvailableCapacity()
-    {
-        try
-        {
-            var root = Path.GetPathRoot(DirectoryPath);
-            return string.IsNullOrEmpty(root) ? null : new DriveInfo(root).AvailableFreeSpace;
-        }
-        catch (Exception)
-        {
-            return null;
-        }
-    }
+    public long? AvailableCapacity() => DiskSpace.Available(DirectoryPath);
 
     /// <summary>SHA-256 をファイルを少しずつ読みながら計算する</summary>
     internal static async Task<string> Sha256Async(string path, CancellationToken cancellationToken)

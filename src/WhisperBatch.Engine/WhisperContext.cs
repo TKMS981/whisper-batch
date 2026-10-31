@@ -14,19 +14,24 @@ internal sealed record ChunkResult(IReadOnlyList<TranscriptSegment> Segments, st
 /// whisper_context は同時に 1 スレッドからしか使えないので、呼び出しを 1 つずつ順に処理する。
 /// 認識は数秒〜数分ブロックするため、スレッドプールではなく専用のスレッドで実行する。
 /// </summary>
-public sealed class WhisperContext : IDisposable
+public sealed class WhisperContext : ITranscriber
 {
-    public WhisperModel Model { get; }
+    public SpeechModel Model { get; }
 
     /// <summary>認識に使っている装置（GPU が使えれば GPU）</summary>
     public ComputeDevice Device { get; }
 
     public bool UsesGpu => Device.IsGpu;
 
+    public string? GpuName => UsesGpu ? Device.Description : null;
+
+    public Task<Transcript> TranscribeAsync(string filePath, TranscriptionOptions options, Action<double> progress, CancellationToken cancellationToken) =>
+        TranscriptionEngine.TranscribeAsync(filePath, this, options, progress, cancellationToken);
+
     private IntPtr _ctx;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
-    private WhisperContext(WhisperModel model, IntPtr ctx, ComputeDevice device)
+    private WhisperContext(SpeechModel model, IntPtr ctx, ComputeDevice device)
     {
         Model = model;
         _ctx = ctx;
@@ -34,14 +39,14 @@ public sealed class WhisperContext : IDisposable
     }
 
     /// <summary>モデルファイルを読み込む。GPU（CUDA）が使えない場合は CPU で読み込み直す。</summary>
-    public static Task<WhisperContext> LoadAsync(WhisperModel model, string filePath, CancellationToken cancellationToken = default) =>
-        RunOnDedicatedThread(() => Load(model, filePath, useGpu: true, flashAttention: true), cancellationToken);
+    public static Task<WhisperContext> LoadAsync(SpeechModel model, string filePath, CancellationToken cancellationToken = default) =>
+        DedicatedThread.Run(() => Load(model, filePath, useGpu: true, flashAttention: true), "WhisperBatch.whisper", cancellationToken);
 
     /// <summary>GPU・Flash Attention の使い方を指定して読み込む（比較・調査用）</summary>
-    internal static Task<WhisperContext> LoadAsync(WhisperModel model, string filePath, bool useGpu, bool flashAttention) =>
-        RunOnDedicatedThread(() => Load(model, filePath, useGpu, flashAttention), CancellationToken.None);
+    internal static Task<WhisperContext> LoadAsync(SpeechModel model, string filePath, bool useGpu, bool flashAttention) =>
+        DedicatedThread.Run(() => Load(model, filePath, useGpu, flashAttention), "WhisperBatch.whisper", CancellationToken.None);
 
-    private static unsafe WhisperContext Load(WhisperModel model, string filePath, bool useGpu, bool flashAttention)
+    private static unsafe WhisperContext Load(SpeechModel model, string filePath, bool useGpu, bool flashAttention)
     {
             NativeRuntime.EnsureInitialized();
             var path = Encoding.UTF8.GetBytes(Path.GetFullPath(filePath) + "\0");
@@ -68,14 +73,15 @@ public sealed class WhisperContext : IDisposable
     }
 
     /// <summary>16kHz モノラル PCM を認識する。時刻は samples 先頭からの相対秒。</summary>
-    internal async Task<ChunkResult> TranscribeAsync(float[] samples, int count, string? language, Action<double> progress, CancellationToken cancellationToken)
+    internal async Task<ChunkResult> TranscribeAsync(float[] samples, int count, string? language, WhisperDecoding decoding,
+                                                     Action<double> progress, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             ObjectDisposedException.ThrowIf(_ctx == IntPtr.Zero, this);
-            return await RunOnDedicatedThread(() => RunFull(samples, count, language, progress, cancellationToken), cancellationToken).ConfigureAwait(false);
+            return await DedicatedThread.Run(() => RunFull(samples, count, language, decoding, progress, cancellationToken), "WhisperBatch.whisper", cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -83,11 +89,11 @@ public sealed class WhisperContext : IDisposable
         }
     }
 
-    private unsafe ChunkResult RunFull(float[] samples, int count, string? language, Action<double> progress, CancellationToken token)
+    private unsafe ChunkResult RunFull(float[] samples, int count, string? language, WhisperDecoding decoding, Action<double> progress, CancellationToken token)
     {
         if (token.IsCancellationRequested) throw new OperationCanceledException(token);
 
-        var prmsPtr = WhisperNative.whisper_full_default_params_by_ref(WhisperSampling.BeamSearch);
+        var prmsPtr = WhisperNative.whisper_full_default_params_by_ref(SamplingStrategy(decoding));
         var prms = *prmsPtr;
         WhisperNative.whisper_free_params(prmsPtr);
 
@@ -153,6 +159,13 @@ public sealed class WhisperContext : IDisposable
         return new ChunkResult(segments, lang);
     }
 
+    /// <summary>
+    /// 速度優先は Greedy、精度優先はビーム幅 5 の Beam Search。
+    /// どちらも、結果が不確かなときは温度を上げて候補 5 つから選び直す（whisper.cpp の既定の動き）。
+    /// </summary>
+    internal static int SamplingStrategy(WhisperDecoding decoding) =>
+        decoding == WhisperDecoding.Greedy ? WhisperSampling.Greedy : WhisperSampling.BeamSearch;
+
     /// <summary>CPU の計算スレッド数。UI 用に余裕を残す（GPU 使用時も前後処理に使う）。</summary>
     public static int RecommendedThreadCount => Math.Max(2, Math.Min(8, Environment.ProcessorCount - 2));
 
@@ -202,22 +215,5 @@ public sealed class WhisperContext : IDisposable
     private static byte OnEncoderBegin(IntPtr ctx, IntPtr state, IntPtr user)
     {
         try { return Box(user).Token.IsCancellationRequested ? (byte)0 : (byte)1; } catch { return 0; }
-    }
-
-    private static Task<T> RunOnDedicatedThread<T>(Func<T> work, CancellationToken cancellationToken)
-    {
-        var tcs = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var thread = new Thread(() =>
-        {
-            try { tcs.SetResult(work()); }
-            catch (OperationCanceledException) { tcs.SetCanceled(cancellationToken); }
-            catch (Exception e) { tcs.SetException(e); }
-        })
-        {
-            IsBackground = true,
-            Name = "WhisperBatch.whisper",
-        };
-        thread.Start();
-        return tcs.Task;
     }
 }

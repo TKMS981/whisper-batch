@@ -28,6 +28,8 @@ if ($LASTEXITCODE -ne 0) { throw 'dotnet publish に失敗しました' }
 # ライセンス表記
 Copy-Item (Join-Path $root 'App\ThirdPartyNotices.txt') $out -Force
 Copy-Item (Join-Path $root 'LICENSE') (Join-Path $out 'LICENSE.txt') -Force
+New-Item -ItemType Directory -Force (Join-Path $out 'Licenses') | Out-Null
+Copy-Item (Join-Path $root 'App\Licenses\*.txt') (Join-Path $out 'Licenses') -Force
 
 $size = (Get-ChildItem $out -Recurse | Measure-Object Length -Sum).Sum / 1MB
 Write-Host ("==> 完了: {0}\WhisperBatch.exe（合計 {1:N0} MB）" -f $out, $size)

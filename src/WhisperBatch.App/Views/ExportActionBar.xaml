@@ -8,7 +8,7 @@
             <Button x:Name="ExportEachButton" Click="OnExportEachClick" AutomationProperties.Name="{l:L action.exportEach}" IsEnabled="{Binding Model.HasCompletedItems}" ToolTip="{l:L action.exportEach.help}" Padding="12,6">
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="{l:L action.exportEach}" />
-                    <TextBlock Text="&#xE70D;" Style="{StaticResource Icon}" FontSize="10" Margin="8,0,0,0" />
+                    <TextBlock Text="&#xE70D;" Style="{StaticResource Icon}" FontSize="{DynamicResource Size.10}" Margin="8,0,0,0" />
                 </StackPanel>
                 <Button.ContextMenu>
                     <ContextMenu x:Name="ExportEachMenu" />

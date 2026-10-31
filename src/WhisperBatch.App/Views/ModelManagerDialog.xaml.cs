@@ -10,18 +10,23 @@ namespace WhisperBatch.App.Views;
 public partial class ModelManagerDialog : Window
 {
     public sealed record RowState(
-        WhisperModel Model, string Name, string Summary, string Details, bool IsRecommended, bool IsSelected,
+        SpeechModel Model, string Name, string Summary, string Details, bool IsRecommended, bool IsSelected,
         string SelectedGlyph, Brush SelectedBrush, bool IsDownloading, double Fraction, string ProgressText,
         string StateText, Brush StateBrush, string ActionLabel, bool ActionEnabled, string UseLabel, bool CanUse, string AccessibleName);
 
     private readonly AppModel _app;
     private readonly MainWindow _main;
+    /// <summary>表示している方式（最初は使用中のモデルの方式）</summary>
+    private SpeechEngine _engine;
 
     public ModelManagerDialog(AppModel app, MainWindow main)
     {
         _app = app;
         _main = main;
+        _engine = app.SelectedEngine;
         InitializeComponent();
+        EnginePicker.ItemsSource = app.EngineChoices;
+        EnginePicker.SelectedValue = _engine;
         StoragePath.Text = app.Models.StoragePath;
         if (app.Models.StorageError is { } error) ShowError(error);
         app.Models.Refresh();
@@ -34,9 +39,18 @@ public partial class ModelManagerDialog : Window
 
     private Brush Brush(string key) => (Brush)(TryFindResource(key) ?? Brushes.Gray);
 
+    private void OnEngineChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        if (EnginePicker.SelectedValue is not SpeechEngine engine || engine == _engine) return;
+        _engine = engine;
+        Render();
+    }
+
     private void Render()
     {
-        var rows = ModelCatalog.All.Select(m =>
+        EngineMessage.Text = _engine.ModelsMessage();
+        EngineSource.Text = _engine.SourceDescription();
+        var rows = ModelCatalog.Models(_engine).Select(m =>
         {
             var state = _app.Models.StateOf(m);
             var selected = _app.SelectedModelId == m.Id;
@@ -68,8 +82,8 @@ public partial class ModelManagerDialog : Window
                 _ => L("model.state.notInstalled"),
             };
             return new RowState(
-                m, m.DisplayName, m.Summary, L("models.row.details", m.FileName, m.SizeText, m.RequiredSpaceText),
-                m.Id == ModelCatalog.DefaultModelId, selected,
+                m, m.DisplayName, m.Summary, L("models.row.details", m.FilesLabel, m.SizeText, m.RequiredSpaceText),
+                m.IsDefaultForEngine, selected,
                 selected ? "" : "", selected ? Brush("AccentTextFillColorPrimaryBrush") : Brush("TextFillColorSecondaryBrush"),
                 downloading is not null, fraction,
                 downloading is { } dl ? L("models.row.progress", (int)(fraction * 100), ByteCount.Format(dl.Received), ByteCount.Format(dl.Total)) : "",

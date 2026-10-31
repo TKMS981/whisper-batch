@@ -2,13 +2,173 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:l="clr-namespace:WhisperBatch.App.Infrastructure"
-        Title="{l:L settings.title}" Width="500" SizeToContent="Height" ResizeMode="NoResize"
-        WindowStartupLocation="CenterOwner" ShowInTaskbar="False" FontFamily="{StaticResource AppFont}">
-    <!-- 設定: 表示言語 -->
-    <StackPanel Margin="24,20">
-        <TextBlock Text="{l:L settings.appLanguage}" FontWeight="SemiBold" Margin="0,0,0,8" />
-        <StackPanel x:Name="Choices" Margin="4,0,0,0" />
-        <TextBlock Text="{l:L settings.appLanguage.note}" Style="{StaticResource Caption}" Margin="0,10,0,0" />
-        <Button Content="{l:L common.close}" IsCancel="True" IsDefault="True" MinWidth="96" HorizontalAlignment="Right" Margin="0,18,0,0" />
-    </StackPanel>
+        xmlns:v="clr-namespace:WhisperBatch.App.Views"
+        Title="{l:L settings.title}" Width="600" SizeToContent="Height" ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        FontFamily="{DynamicResource AppFont}" FontSize="{DynamicResource Size.14}">
+    <Window.Resources>
+        <!-- 設定項目の見出し（左の列） -->
+        <Style x:Key="Label" TargetType="TextBlock">
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Margin" Value="0,4,16,0" />
+            <Setter Property="VerticalAlignment" Value="Top" />
+        </Style>
+        <!-- 設定項目の下の説明 -->
+        <Style x:Key="Note" TargetType="TextBlock" BasedOn="{StaticResource Caption}">
+            <Setter Property="Margin" Value="0,6,0,0" />
+            <Setter Property="MaxWidth" Value="400" />
+            <Setter Property="HorizontalAlignment" Value="Left" />
+        </Style>
+    </Window.Resources>
+
+    <!-- 設定: 一般（表示言語・自動開始・Whisper の探索方式）、フォント、テーマ -->
+    <DockPanel Margin="20,16,20,20">
+        <Button DockPanel.Dock="Bottom" Content="{l:L common.close}" IsCancel="True" IsDefault="True" MinWidth="96" HorizontalAlignment="Right" Margin="0,16,0,0" />
+
+        <TabControl x:Name="Tabs" MinHeight="380">
+            <!-- 一般 -->
+            <TabItem Header="{l:L settings.tab.general}">
+                <Grid Margin="8,16,8,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Text="{l:L settings.appLanguage}" Style="{StaticResource Label}" />
+                    <StackPanel Grid.Row="0" Grid.Column="1">
+                        <StackPanel x:Name="LanguageChoices" />
+                        <TextBlock Text="{l:L settings.appLanguage.note}" Style="{StaticResource Note}" />
+                    </StackPanel>
+
+                    <TextBlock Grid.Row="1" Text="{l:L settings.autoStart}" Style="{StaticResource Label}" Margin="0,22,16,0" />
+                    <StackPanel Grid.Row="1" Grid.Column="1" Margin="0,18,0,0">
+                        <CheckBox Content="{l:L settings.autoStart.toggle}" IsChecked="{Binding AutoStartOnAdd}" />
+                        <TextBlock Text="{l:L settings.autoStart.note}" Style="{StaticResource Note}" />
+                    </StackPanel>
+
+                    <TextBlock Grid.Row="2" Text="{l:L settings.decoding}" Style="{StaticResource Label}" Margin="0,22,16,0" />
+                    <StackPanel Grid.Row="2" Grid.Column="1" Margin="0,18,0,0">
+                        <StackPanel x:Name="DecodingChoices" />
+                        <TextBlock Text="{l:L settings.decoding.note}" Style="{StaticResource Note}" />
+                    </StackPanel>
+                </Grid>
+            </TabItem>
+
+            <!-- フォント -->
+            <TabItem Header="{l:L settings.tab.font}">
+                <Grid Margin="8,16,8,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Text="{l:L settings.font.family}" Style="{StaticResource Label}" Margin="0,7,16,0" />
+                    <ComboBox x:Name="FontFamilyBox" Grid.Row="0" Grid.Column="1" MaxWidth="360" HorizontalAlignment="Left" MinWidth="280"
+                              SelectionChanged="OnFontFamilyChanged" AutomationProperties.Name="{l:L settings.font.family}">
+                        <ComboBox.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <VirtualizingStackPanel />
+                            </ItemsPanelTemplate>
+                        </ComboBox.ItemsPanel>
+                    </ComboBox>
+
+                    <TextBlock Grid.Row="1" Text="{l:L settings.font.size}" Style="{StaticResource Label}" Margin="0,20,16,0" />
+                    <ListBox x:Name="FontSizePicker" Grid.Row="1" Grid.Column="1" Style="{StaticResource Segmented}" Margin="0,14,0,0"
+                             DisplayMemberPath="Label" SelectedValuePath="Value" SelectionChanged="OnFontSizeChanged"
+                             AutomationProperties.Name="{l:L settings.font.size}" />
+
+                    <TextBlock Grid.Row="2" Text="{l:L settings.font.preview}" Style="{StaticResource Label}" Margin="0,24,16,0" />
+                    <Border Grid.Row="2" Grid.Column="1" Margin="0,18,0,0" Padding="12,10" CornerRadius="8" MaxWidth="400" HorizontalAlignment="Left"
+                            Background="{DynamicResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+                        <StackPanel>
+                            <TextBlock Text="{l:L settings.font.preview.title}" FontWeight="SemiBold" />
+                            <TextBlock Text="{l:L settings.font.preview.body}" TextWrapping="Wrap" Margin="0,4,0,0" FontSize="{DynamicResource Size.15}" />
+                            <TextBlock Text="{l:L settings.font.preview.caption}" Style="{StaticResource Caption}" Margin="0,4,0,0" />
+                        </StackPanel>
+                    </Border>
+
+                    <TextBlock Grid.Row="3" Grid.Column="1" Text="{l:L settings.font.note}" Style="{StaticResource Note}" Margin="0,10,0,0" />
+
+                    <Button x:Name="ResetFontButton" Grid.Row="4" Grid.ColumnSpan="2" Content="{l:L settings.resetDefaults}" Click="OnResetFont"
+                            HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,16,0,0" />
+                </Grid>
+            </TabItem>
+
+            <!-- テーマ -->
+            <TabItem Header="{l:L settings.tab.theme}">
+                <Grid Margin="8,16,8,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Text="{l:L settings.appearance}" Style="{StaticResource Label}" Margin="0,6,16,0" />
+                    <ListBox x:Name="AppearancePicker" Grid.Row="0" Grid.Column="1" Style="{StaticResource Segmented}"
+                             DisplayMemberPath="Label" SelectedValuePath="Value" SelectionChanged="OnAppearanceChanged"
+                             AutomationProperties.Name="{l:L settings.appearance}" />
+
+                    <TextBlock Grid.Row="1" Text="{l:L settings.background}" Style="{StaticResource Label}" Margin="0,20,16,0" />
+                    <ListBox x:Name="BackgroundPicker" Grid.Row="1" Grid.Column="1" Style="{StaticResource Segmented}" Margin="0,14,0,0"
+                             DisplayMemberPath="Label" SelectedValuePath="Value" SelectionChanged="OnBackgroundChanged"
+                             AutomationProperties.Name="{l:L settings.background}" />
+
+                    <!-- 色 -->
+                    <TextBlock x:Name="ColorLabel" Grid.Row="2" Text="{l:L settings.background.colorPicker}" Style="{StaticResource Label}" Margin="0,20,16,0" />
+                    <StackPanel x:Name="ColorPanel" Grid.Row="2" Grid.Column="1" Margin="0,14,0,0">
+                        <Button Click="OnChooseColor" HorizontalAlignment="Left" AutomationProperties.Name="{l:L settings.background.chooseColor}">
+                            <StackPanel Orientation="Horizontal">
+                                <Border x:Name="ColorSwatch" Width="18" Height="18" CornerRadius="4" BorderThickness="1" Margin="0,0,8,0"
+                                        BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}" />
+                                <TextBlock Text="{l:L settings.background.chooseColor}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <TextBlock Text="{l:L settings.background.color.note}" Style="{StaticResource Note}" />
+                    </StackPanel>
+
+                    <!-- 画像 -->
+                    <TextBlock x:Name="ImageLabel" Grid.Row="3" Text="{l:L settings.background.imageFile}" Style="{StaticResource Label}" Margin="0,20,16,0" />
+                    <StackPanel x:Name="ImagePanel" Grid.Row="3" Grid.Column="1" Orientation="Horizontal" Margin="0,14,0,0">
+                        <TextBlock x:Name="ImageName" VerticalAlignment="Center" MaxWidth="180" TextTrimming="CharacterEllipsis" Margin="0,0,10,0" />
+                        <Button Content="{l:L settings.background.chooseImage}" Click="OnChooseImage" Margin="0,0,6,0" />
+                        <Button x:Name="RemoveImageButton" Content="{l:L settings.background.removeImage}" Click="OnRemoveImage" />
+                    </StackPanel>
+                    <TextBlock x:Name="OpacityLabel" Grid.Row="4" Text="{l:L settings.background.opacity}" Style="{StaticResource Label}" Margin="0,18,16,0" />
+                    <StackPanel x:Name="OpacityPanel" Grid.Row="4" Grid.Column="1" Margin="0,12,0,0">
+                        <StackPanel Orientation="Horizontal">
+                            <Slider x:Name="OpacitySlider" Width="220" Minimum="0.05" Maximum="1" SmallChange="0.05" LargeChange="0.1"
+                                    ValueChanged="OnOpacityChanged" VerticalAlignment="Center" AutomationProperties.Name="{l:L settings.background.opacity}" />
+                            <TextBlock x:Name="OpacityText" Width="48" TextAlignment="Right" VerticalAlignment="Center" FontFamily="{StaticResource MonoDigits}" />
+                        </StackPanel>
+                        <TextBlock Text="{l:L settings.background.image.note}" Style="{StaticResource Note}" />
+                    </StackPanel>
+
+                    <TextBlock x:Name="PreviewLabel" Grid.Row="5" Text="{l:L settings.background.preview}" Style="{StaticResource Label}" Margin="0,20,16,0" />
+                    <Border x:Name="PreviewFrame" Grid.Row="5" Grid.Column="1" Width="200" Height="112" CornerRadius="8" Margin="0,16,0,0" HorizontalAlignment="Left"
+                            BorderThickness="1" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}" ClipToBounds="True">
+                        <v:ThemeBackgroundView x:Name="Preview" />
+                    </Border>
+                </Grid>
+            </TabItem>
+        </TabControl>
+    </DockPanel>
 </Window>

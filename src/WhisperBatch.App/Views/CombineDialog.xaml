@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:l="clr-namespace:WhisperBatch.App.Infrastructure"
         Title="{l:L combine.title}" Width="600" Height="560" MinWidth="480" MinHeight="440"
-        WindowStartupLocation="CenterOwner" ShowInTaskbar="False" FontFamily="{StaticResource AppFont}">
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False" FontFamily="{DynamicResource AppFont}" FontSize="{DynamicResource Size.14}">
     <DockPanel Margin="20">
         <!-- 含める結果と順序を決めて 1 つのテキストファイルに保存する -->
         <StackPanel DockPanel.Dock="Top">

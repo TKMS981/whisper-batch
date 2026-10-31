@@ -1,5 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <!-- whisper.cpp（CUDA）/ Media Foundation による読み込み・動画の MP3 変換 / モデル取得 -->
+  <!-- whisper.cpp（CUDA）・sherpa-onnx（ReazonSpeech）/ Media Foundation による読み込み・動画の MP3 変換 / モデル取得 -->
   <PropertyGroup>
     <TargetFramework>net10.0-windows</TargetFramework>
     <RootNamespace>WhisperBatch.Engine</RootNamespace>
@@ -16,6 +16,9 @@
     <PackageReference Include="NVorbis" Version="0.10.5" />
     <PackageReference Include="Concentus" Version="2.2.2" />
     <PackageReference Include="Concentus.OggFile" Version="1.0.7" />
+    <!-- ReazonSpeech を動かす sherpa-onnx（Apache-2.0。ONNX Runtime を同梱）。macOS 版と同じ v1.13.8。
+         C# の構造体定義と、win-x64 用の sherpa-onnx-c-api.dll・onnxruntime.dll を使う -->
+    <PackageReference Include="org.k2fsa.sherpa.onnx" Version="1.13.8" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="WhisperBatch.Engine.Tests" />

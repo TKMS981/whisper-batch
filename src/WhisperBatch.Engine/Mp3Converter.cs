@@ -28,10 +28,12 @@ public static class Mp3Converter
     /// 失敗・キャンセル時は書きかけの <paramref name="destination"/> を削除する。元のファイルは変更しない。
     /// </summary>
     /// <param name="progress">0...1。任意のスレッドから呼ばれる。</param>
-    public static Task ConvertAsync(string source, string destination, Action<double> progress, CancellationToken cancellationToken = default) =>
-        Task.Run(() => Convert(source, destination, progress, cancellationToken), CancellationToken.None);
+    /// <param name="finalFolders">変換後に MP3 を移す先のフォルダ。<paramref name="destination"/>（一時フォルダ）と合わせて、変換を始める前に空き容量を確かめる。</param>
+    public static Task ConvertAsync(string source, string destination, Action<double> progress, CancellationToken cancellationToken = default,
+                                    IReadOnlyList<string>? finalFolders = null) =>
+        Task.Run(() => Convert(source, destination, finalFolders ?? [], progress, cancellationToken), CancellationToken.None);
 
-    private static void Convert(string sourcePath, string destination, Action<double> progress, CancellationToken token)
+    private static void Convert(string sourcePath, string destination, IReadOnlyList<string> finalFolders, Action<double> progress, CancellationToken token)
     {
         var name = Path.GetFileName(sourcePath);
         if (!File.Exists(sourcePath)) throw new WhisperBatchError.FileNotFound(name).ToException();
@@ -40,12 +42,9 @@ public static class Mp3Converter
         using var source = MediaSource.Open(sourcePath, maxChannels: 2);
         var duration = source.Duration.TotalSeconds;
 
-        // 出力先の空き容量を確認する
+        // 書き込みを始める前に、一時フォルダと移動先の空き容量を確認する
         var required = EstimatedSize(duration);
-        if (AvailableSpace(destination) is { } available && available < required)
-        {
-            throw new WhisperBatchError.InsufficientDiskSpace(required, available).ToException();
-        }
+        DiskSpace.Ensure(required, [Path.GetDirectoryName(Path.GetFullPath(destination))!, .. finalFolders]);
 
         // ステレオ以上は 2ch、モノラルは 1ch のまま
         var channels = source.WaveFormat.Channels >= 2 ? 2 : 1;
@@ -66,17 +65,11 @@ public static class Mp3Converter
             succeeded = true;
             progress(1);
         }
-        catch (COMException e) when (e.HResult is unchecked((int)0x80070070) or unchecked((int)0x80070027))
+        catch (Exception e) when (e is COMException or IOException or UnauthorizedAccessException)
         {
-            throw new WhisperBatchError.InsufficientDiskSpace(required, 0).ToException();
-        }
-        catch (COMException e)
-        {
-            throw new WhisperBatchError.ConversionFailed(name, MfInterop.Describe(e)).ToException();
-        }
-        catch (IOException e) when ((e.HResult & 0xFFFF) is 0x70 or 0x27)
-        {
-            throw new WhisperBatchError.InsufficientDiskSpace(required, 0).ToException();
+            // 空き容量がなくなった・保存先に書き込めない場合などは、次の行動が分かるエラーにする
+            throw (ErrorMapper.Map(e, ErrorMapper.Operation.Write(Path.GetFileName(destination)))
+                   ?? new WhisperBatchError.ConversionFailed(name, e is COMException c ? MfInterop.Describe(c) : e.Message)).ToException();
         }
         catch (Exception e) when (e is not WhisperBatchException and not OperationCanceledException)
         {
@@ -85,20 +78,6 @@ public static class Mp3Converter
         finally
         {
             if (!succeeded) FileUtil.DeleteQuietly(destination);
-        }
-    }
-
-    internal static long? AvailableSpace(string path)
-    {
-        try
-        {
-            var root = Path.GetPathRoot(Path.GetFullPath(path));
-            if (string.IsNullOrEmpty(root)) return null;
-            return new DriveInfo(root).AvailableFreeSpace;
-        }
-        catch (Exception)
-        {
-            return null;
         }
     }
 

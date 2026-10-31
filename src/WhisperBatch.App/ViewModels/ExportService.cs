@@ -165,7 +165,7 @@ public static class ExportService
         }
         catch (Exception e)
         {
-            throw new WhisperBatchError.ExportFailed(Path.GetFileName(destination), Describe(e)).ToException();
+            throw Failure(e, Path.GetFileName(destination));
         }
     }
 
@@ -215,17 +215,13 @@ public static class ExportService
         catch (Exception e)
         {
             TryDelete(temp);
-            throw new WhisperBatchError.ExportFailed(Path.GetFileName(path), Describe(e)).ToException();
+            throw Failure(e, Path.GetFileName(path));
         }
     });
 
-    private static string Describe(Exception e) => e switch
-    {
-        UnauthorizedAccessException => L("export.detail.noPermission"),
-        IOException io when (io.HResult & 0xFFFF) is 0x70 or 0x27 => L("export.detail.outOfSpace"),
-        IOException io when (io.HResult & 0xFFFF) is 0x13 => L("export.detail.readOnly"),
-        _ => e.Message,
-    };
+    /// <summary>権限・空き容量・読み取り専用などは、別の保存先を選ぶなどの案内を含むエラーにする</summary>
+    private static WhisperBatchException Failure(Exception e, string fileName) =>
+        (ErrorMapper.Map(e, ErrorMapper.Operation.Write(fileName)) ?? new WhisperBatchError.ExportFailed(fileName, e.Message)).ToException();
 
     private static void TryDelete(string path)
     {

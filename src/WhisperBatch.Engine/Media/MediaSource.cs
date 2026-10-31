@@ -86,7 +86,8 @@ internal static class MediaSource
         }
         catch (IOException e)
         {
-            throw new WhisperBatchError.AudioDecodingFailed(name, e.Message).ToException();
+            // ディスクの切断などは、次の行動が分かるエラーにする
+            throw (ErrorMapper.Map(e, ErrorMapper.Operation.Read(name)) ?? new WhisperBatchError.AudioDecodingFailed(name, e.Message)).ToException();
         }
     }
 }
@@ -281,7 +282,8 @@ internal sealed class MfMediaSource : IMediaSource
         catch (COMException e)
         {
             _finished = true;
-            throw new WhisperBatchError.AudioDecodingFailed(_name, MfInterop.Describe(e)).ToException();
+            throw (ErrorMapper.Map(e, ErrorMapper.Operation.Read(_name))
+                   ?? new WhisperBatchError.AudioDecodingFailed(_name, MfInterop.Describe(e))).ToException();
         }
         try
         {
@@ -447,10 +449,12 @@ internal static class MfInterop
         }
     }
 
+    /// <summary>ファイルを開くときのエラー。権限・見つからない・ディスクの切断は <see cref="ErrorMapper"/> で、形式の問題は Media Foundation のコードで分類する。</summary>
     public static WhisperBatchError MapOpenError(COMException e, string name) => e.HResult switch
     {
         E_FILE_NOT_FOUND or E_PATH_NOT_FOUND => new WhisperBatchError.FileNotFound(name),
         E_ACCESS_DENIED => new WhisperBatchError.FileAccessDenied(name),
+        _ when ErrorMapper.Map(e, ErrorMapper.Operation.Read(name)) is { } mapped => mapped,
         MF_E_UNSUPPORTED_BYTESTREAM_TYPE or MF_E_UNSUPPORTED_SCHEME or MF_E_UNSUPPORTED_FORMAT or MF_E_INVALID_FILE_FORMAT
             or MF_E_TOPO_CODEC_NOT_FOUND or MF_E_INVALIDMEDIATYPE or MF_E_TRANSFORM_TYPE_NOT_SET or MF_E_NOT_FOUND
             or MF_E_INVALIDTYPE or MF_E_NO_MORE_TYPES => new WhisperBatchError.UnsupportedFormat(name),

@@ -3,6 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:v="clr-namespace:WhisperBatch.App.Views"
              xmlns:l="clr-namespace:WhisperBatch.App.Infrastructure"
+             xmlns:sys="clr-namespace:System;assembly=System.Runtime"
              ThemeMode="System"
              ShutdownMode="OnMainWindowClose">
     <Application.Resources>
@@ -12,19 +13,32 @@
         <l:EqualsToVisibility x:Key="When" />
         <l:Not x:Key="Not" />
 
-        <!-- 日本語は Yu Gothic UI で表示する（Segoe UI Variable には日本語の字形がないため） -->
+        <!-- 日本語は Yu Gothic UI で表示する（Segoe UI Variable には日本語の字形がないため）。
+             設定の「フォント」で選んだ書体と文字の大きさは、起動時と変更時に AppearanceSettings.Apply が書き換える -->
         <FontFamily x:Key="AppFont">Segoe UI Variable Text, Yu Gothic UI, Meiryo UI, Segoe UI</FontFamily>
+        <sys:Double x:Key="Size.9">9</sys:Double>
+        <sys:Double x:Key="Size.10">10</sys:Double>
+        <sys:Double x:Key="Size.11">11</sys:Double>
+        <sys:Double x:Key="Size.12">12</sys:Double>
+        <sys:Double x:Key="Size.13">13</sys:Double>
+        <sys:Double x:Key="Size.14">14</sys:Double>
+        <sys:Double x:Key="Size.15">15</sys:Double>
+        <sys:Double x:Key="Size.16">16</sys:Double>
+        <sys:Double x:Key="Size.17">17</sys:Double>
+        <sys:Double x:Key="Size.18">18</sys:Double>
+        <sys:Double x:Key="Size.20">20</sys:Double>
+        <sys:Double x:Key="Size.40">40</sys:Double>
         <FontFamily x:Key="IconFont">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
         <FontFamily x:Key="MonoDigits">Segoe UI Variable Text, Yu Gothic UI</FontFamily>
 
         <Style x:Key="Icon" TargetType="TextBlock">
             <Setter Property="FontFamily" Value="{StaticResource IconFont}" />
-            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontSize" Value="{DynamicResource Size.14}" />
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
 
         <Style x:Key="Caption" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontSize" Value="{DynamicResource Size.12}" />
             <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
             <Setter Property="TextWrapping" Value="Wrap" />
         </Style>
@@ -35,7 +49,7 @@
         </Style>
 
         <Style x:Key="Title" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="20" />
+            <Setter Property="FontSize" Value="{DynamicResource Size.20}" />
             <Setter Property="FontWeight" Value="SemiBold" />
         </Style>
 
@@ -46,7 +60,7 @@
 
         <Style x:Key="SmallButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
             <Setter Property="Padding" Value="10,3" />
-            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontSize" Value="{DynamicResource Size.12}" />
             <Setter Property="MinHeight" Value="26" />
         </Style>
 
@@ -78,16 +92,77 @@
             </Setter>
         </Style>
 
+        <!-- 横並びの切り替えボタン（方式・文字の大きさ・外観・背景）。ListBox なので矢印キーでも選べ、読み上げでは一覧として扱われる -->
+        <Style x:Key="Segmented" TargetType="ListBox">
+            <Setter Property="SelectionMode" Value="Single" />
+            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
+            <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Disabled" />
+            <Setter Property="HorizontalAlignment" Value="Left" />
+            <Setter Property="ItemsPanel">
+                <Setter.Value>
+                    <ItemsPanelTemplate>
+                        <StackPanel Orientation="Horizontal" />
+                    </ItemsPanelTemplate>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBox">
+                        <Border x:Name="Frame" CornerRadius="6" Padding="2" BorderThickness="1"
+                                Background="{DynamicResource ControlFillColorSecondaryBrush}" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}">
+                            <ItemsPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Frame" Property="Opacity" Value="0.55" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="ItemContainerStyle">
+                <Setter.Value>
+                    <Style TargetType="ListBoxItem">
+                        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+                        <!-- キーボードでの位置は下の枠線で示す（標準の点線の枠は出さない） -->
+                        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+                        <Setter Property="Cursor" Value="Hand" />
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="ListBoxItem">
+                                    <Border x:Name="Bd" CornerRadius="4" Padding="12,4" Background="Transparent" BorderThickness="1" BorderBrush="Transparent">
+                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                                        </Trigger>
+                                        <Trigger Property="IsKeyboardFocused" Value="True">
+                                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource FocusStrokeColorOuterBrush}" />
+                                        </Trigger>
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+                                            <Setter Property="Foreground" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <!-- 結果がない・選択がないときの案内（中央に大きなアイコン、見出し、説明、操作） -->
         <Style TargetType="v:EmptyStateView">
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="v:EmptyStateView">
                         <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="460" Margin="24">
-                            <TextBlock Text="{TemplateBinding Glyph}" Style="{StaticResource Icon}" FontSize="40"
+                            <TextBlock Text="{TemplateBinding Glyph}" Style="{StaticResource Icon}" FontSize="{DynamicResource Size.40}"
                                        HorizontalAlignment="Center" Margin="0,0,0,14"
                                        Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
-                            <TextBlock Text="{TemplateBinding Title}" FontSize="18" FontWeight="SemiBold"
+                            <TextBlock Text="{TemplateBinding Title}" FontSize="{DynamicResource Size.18}" FontWeight="SemiBold"
                                        HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" />
                             <TextBox Text="{TemplateBinding Message}" IsReadOnly="True" TextWrapping="Wrap" TextAlignment="Center"
                                      BorderThickness="0" Background="Transparent" Padding="0" Margin="0,8,0,0" Focusable="{TemplateBinding MessageSelectable}"

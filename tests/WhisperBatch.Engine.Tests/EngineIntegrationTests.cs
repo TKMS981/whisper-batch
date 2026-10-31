@@ -80,7 +80,7 @@ public sealed class WhisperFixture : IDisposable
     {
         TestLocalization.SetUp();
         if (TestEnv.Get(TestEnv.Model) is not { } path) return;
-        var model = ModelCatalog.All.FirstOrDefault(m => m.FileName == Path.GetFileName(path)) ?? ModelCatalog.All[0];
+        var model = ModelCatalog.All.FirstOrDefault(m => m.Files[0].Name == Path.GetFileName(path)) ?? ModelCatalog.All[0];
         Context = WhisperContext.LoadAsync(model, path).GetAwaiter().GetResult();
     }
 
@@ -218,7 +218,9 @@ public class ModelDownloadTests
 {
     public ModelDownloadTests() => TestLocalization.SetUp();
 
-    private readonly WhisperModel _model = ModelCatalog.Model("tiny")!;
+    private readonly SpeechModel _model = ModelCatalog.Model("tiny")!;
+
+    private ModelFile File0 => _model.Files[0];
 
     [EnvFact(TestEnv.DownloadDir)]
     public async Task CancelThenDownloadAndVerify()
@@ -236,7 +238,7 @@ public class ModelDownloadTests
             Assert.True(e.IsCancelled);
         }
         Assert.False(storage.IsInstalled(_model));
-        Assert.False(File.Exists(storage.PartialPath(_model)));
+        Assert.False(File.Exists(storage.PartialPath(File0, _model)));
 
         // 通常の取得と検証
         var progress = new ProgressRecorder();
@@ -245,8 +247,8 @@ public class ModelDownloadTests
         Assert.True(storage.IsInstalled(_model));
         Assert.True(verified);
         Assert.True(progress.Last > 0.99);
-        Assert.False(File.Exists(storage.PartialPath(_model)));
-        Assert.Equal(_model.Sha256, await ModelStorage.Sha256Async(storage.FilePath(_model), default));
+        Assert.False(File.Exists(storage.PartialPath(File0, _model)));
+        Assert.Equal(File0.Sha256, await ModelStorage.Sha256Async(storage.FilePath(File0, _model), default));
 
         storage.Delete(_model);
         Assert.False(storage.IsInstalled(_model));
@@ -263,12 +265,12 @@ public class ModelDownloadTests
         {
             storage.EnsureDirectory();
             using var http = new HttpClient();
-            using var request = new HttpRequestMessage(HttpMethod.Get, _model.DownloadUrl);
+            using var request = new HttpRequestMessage(HttpMethod.Get, File0.Url);
             request.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(0, 10_000_000 - 1);
             using var response = await http.SendAsync(request);
-            await File.WriteAllBytesAsync(storage.PartialPath(_model), await response.Content.ReadAsByteArrayAsync());
+            await File.WriteAllBytesAsync(storage.PartialPath(File0, _model), await response.Content.ReadAsByteArrayAsync());
         }
-        Assert.Equal(10_000_000, new FileInfo(storage.PartialPath(_model)).Length);
+        Assert.Equal(10_000_000, new FileInfo(storage.PartialPath(File0, _model)).Length);
         long first = -1;
         await ModelDownloader.DownloadAsync(_model, storage, resume: true, (done, _) => { if (first < 0) first = done; }, () => { });
         Assert.Equal(10_000_000, first);

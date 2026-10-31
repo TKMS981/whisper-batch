@@ -7,7 +7,8 @@ obj/
 TestResults/
 
 # scripts/fetch-whisper.ps1 が取得・展開する whisper.cpp（CUDA 版）の DLL（公式配布物から毎回取得する）
-native/
+# ルートの native/ だけを除外する（Windows では大文字小文字を区別しないため、"native/" だと src/WhisperBatch.Engine/Native/ のソースまで除外される）
+/native/
 
 # OS のメタデータ
 .DS_Store

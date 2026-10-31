@@ -14,7 +14,7 @@ public class BackendComparison(ITestOutputHelper output)
     {
         TestLocalization.SetUp();
         var path = TestEnv.Get(TestEnv.Model)!;
-        var model = ModelCatalog.All.First(m => m.FileName == Path.GetFileName(path));
+        var model = ModelCatalog.All.First(m => m.Files[0].Name == Path.GetFileName(path));
         using var ctx = await WhisperContext.LoadAsync(model, path, gpu, fa);
         var w = Stopwatch.StartNew();
         var t = await TranscriptionEngine.TranscribeAsync(TestEnv.Media("long.wav"), ctx, new TranscriptionOptions(LanguageOption.Japanese), _ => { });

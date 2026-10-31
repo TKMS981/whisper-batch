@@ -28,7 +28,7 @@
                     <DockPanel>
                         <v:StatusIcon DockPanel.Dock="Left" DataContext="{Binding Model.SingleSelected}" Margin="0,0,10,0" VerticalAlignment="Center" />
                         <StackPanel>
-                            <TextBox Text="{Binding Model.SingleSelected.DisplayName, Mode=OneWay}" IsReadOnly="True" FontWeight="SemiBold" FontSize="15"
+                            <TextBox Text="{Binding Model.SingleSelected.DisplayName, Mode=OneWay}" IsReadOnly="True" FontWeight="SemiBold" FontSize="{DynamicResource Size.15}"
                                      BorderThickness="0" Background="Transparent" Padding="0" />
                             <TextBlock Text="{Binding Model.SingleSelected.DetailLine}" Style="{StaticResource Caption}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
                         </StackPanel>
@@ -39,7 +39,7 @@
                         <Button Click="OnSaveMp3" Style="{StaticResource SmallButton}" ToolTip="{l:L mp3.save.help}" AutomationProperties.Name="{l:L mp3.save}"
                                 Visibility="{Binding Model.SingleSelected.IsExportingMp3, Converter={StaticResource NotVisible}}">
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="&#xE8D6;" Style="{StaticResource ButtonGlyph}" FontSize="12" />
+                                <TextBlock Text="&#xE8D6;" Style="{StaticResource ButtonGlyph}" FontSize="{DynamicResource Size.12}" />
                                 <TextBlock Text="{l:L mp3.save}" />
                             </StackPanel>
                         </Button>
@@ -57,16 +57,16 @@
                         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                             <Button x:Name="CopyButton" Click="OnCopy" Style="{StaticResource SmallButton}" Margin="0,0,6,0" AutomationProperties.Name="{l:L detail.copy}">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock x:Name="CopyGlyph" Text="&#xE8C8;" Style="{StaticResource ButtonGlyph}" FontSize="12" />
+                                    <TextBlock x:Name="CopyGlyph" Text="&#xE8C8;" Style="{StaticResource ButtonGlyph}" FontSize="{DynamicResource Size.12}" />
                                     <TextBlock x:Name="CopyText" Text="{l:L detail.copy}" />
                                 </StackPanel>
                             </Button>
                             <Button x:Name="ExportButton" Click="OnExportThis" Style="{StaticResource SmallButton}"
                                     AutomationProperties.Name="{l:L detail.exportThis.accessibility}">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="&#xEDE1;" Style="{StaticResource ButtonGlyph}" FontSize="12" />
+                                    <TextBlock Text="&#xEDE1;" Style="{StaticResource ButtonGlyph}" FontSize="{DynamicResource Size.12}" />
                                     <TextBlock Text="{l:L detail.exportThis}" />
-                                    <TextBlock Text="&#xE70D;" Style="{StaticResource Icon}" FontSize="9" Margin="6,0,0,0" />
+                                    <TextBlock Text="&#xE70D;" Style="{StaticResource Icon}" FontSize="{DynamicResource Size.9}" Margin="6,0,0,0" />
                                 </StackPanel>
                                 <Button.ContextMenu>
                                     <ContextMenu x:Name="ExportMenu" />
@@ -120,13 +120,13 @@
                             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                                 <TextBlock x:Name="FindStatus" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="8,0" />
                                 <Button Click="OnFindPrevious" Padding="8,4" ToolTip="{l:L detail.find.previous}" AutomationProperties.Name="{l:L detail.find.previous}">
-                                    <TextBlock Text="&#xE70E;" Style="{StaticResource Icon}" FontSize="11" />
+                                    <TextBlock Text="&#xE70E;" Style="{StaticResource Icon}" FontSize="{DynamicResource Size.11}" />
                                 </Button>
                                 <Button Click="OnFindNext" Padding="8,4" Margin="4,0" ToolTip="{l:L detail.find.next}" AutomationProperties.Name="{l:L detail.find.next}">
-                                    <TextBlock Text="&#xE70D;" Style="{StaticResource Icon}" FontSize="11" />
+                                    <TextBlock Text="&#xE70D;" Style="{StaticResource Icon}" FontSize="{DynamicResource Size.11}" />
                                 </Button>
                                 <Button Click="OnFindClose" Padding="8,4" ToolTip="{l:L common.close}" AutomationProperties.Name="{l:L common.close}">
-                                    <TextBlock Text="&#xE711;" Style="{StaticResource Icon}" FontSize="11" />
+                                    <TextBlock Text="&#xE711;" Style="{StaticResource Icon}" FontSize="{DynamicResource Size.11}" />
                                 </Button>
                             </StackPanel>
                             <TextBox x:Name="FindBox" KeyDown="OnFindKeyDown" TextChanged="OnFindTextChanged" MaxWidth="320" HorizontalAlignment="Left" MinWidth="220"
@@ -135,7 +135,7 @@
                     </Border>
                     <TextBox x:Name="TranscriptBox" Text="{Binding Model.DetailText, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap"
                              VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AcceptsReturn="True"
-                             BorderThickness="0" Padding="16,12" FontSize="15" Background="Transparent" IsInactiveSelectionHighlightEnabled="True"
+                             BorderThickness="0" Padding="16,12" FontSize="{DynamicResource Size.15}" Background="Transparent" IsInactiveSelectionHighlightEnabled="True"
                              AutomationProperties.Name="{l:L detail.text.accessibility}">
                         <TextBox.Resources>
                             <Style TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}" />

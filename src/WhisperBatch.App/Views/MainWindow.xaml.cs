@@ -10,6 +10,7 @@ using Microsoft.Win32;
 using WhisperBatch.App.Infrastructure;
 using WhisperBatch.App.ViewModels;
 using WhisperBatch.Core;
+using WhisperBatch.Engine;
 using WhisperBatch.Engine.Native;
 using static WhisperBatch.Core.Loc;
 
@@ -18,7 +19,7 @@ namespace WhisperBatch.App.Views;
 public partial class MainWindow : Window
 {
     public AppModel Model { get; }
-    private readonly AppSettings _settings;
+    private readonly SettingsStore _settings;
     private bool _syncingSelection;
     private bool _closeConfirmed;
     private readonly DispatcherTimer _dragLeaveTimer = new() { Interval = TimeSpan.FromMilliseconds(80) };
@@ -32,7 +33,7 @@ public partial class MainWindow : Window
     public ICommand SettingsCommand { get; }
     public ICommand FindCommand { get; }
 
-    public MainWindow(AppModel model, AppSettings settings)
+    public MainWindow(AppModel model, SettingsStore settings)
     {
         Model = model;
         _settings = settings;
@@ -47,6 +48,7 @@ public partial class MainWindow : Window
 
         InitializeComponent();
         DataContext = this;
+        ThemeLayer.Settings = Model.Appearance;
         RestorePlacement();
 
         Model.PropertyChanged += (_, _) => CommandManager.InvalidateRequerySuggested();
@@ -159,6 +161,8 @@ public partial class MainWindow : Window
 
     private void OnRemovePending(object sender, RoutedEventArgs e) => Model.RemoveAllPending();
 
+    private void OnRemoveCompleted(object sender, RoutedEventArgs e) => Model.RemoveCompleted();
+
     private void OnRemoveAll(object sender, RoutedEventArgs e) => Model.RemoveAll();
 
     private void OnRetryFailed(object sender, RoutedEventArgs e) => Model.RetryFailed();
@@ -230,9 +234,9 @@ public partial class MainWindow : Window
     private void ShowSettings() => new SettingsDialog(Model) { Owner = this }.ShowDialog();
 
     /// <summary>モデルのダウンロード前の確認（通信先・サイズ・保存先を示す）</summary>
-    public void ConfirmDownload(WhisperModel target, Window? owner = null)
+    public void ConfirmDownload(SpeechModel target, Window? owner = null)
     {
-        var message = L("download.confirm.message", target.DisplayName, target.SizeText, target.RequiredSpaceText, Model.Models.StoragePath);
+        var message = L("download.confirm.message", target.DisplayName, target.SizeText, target.SourceHost, target.RequiredSpaceText, Model.Models.StoragePath);
         var choice = Dialogs.Ask(L("download.confirm.title"), message, [L("download.confirm.download"), L("common.cancel")], 0, 1, owner: owner ?? this);
         if (choice == 0) Model.Models.Download(target);
     }
@@ -266,6 +270,7 @@ public partial class MainWindow : Window
         {
             engine = ErrorMessages.UserFacing(ex);
         }
+        if (ReazonSpeechContext.Version is { } sherpa) engine += "\n" + L("about.engine.reazonSpeech", sherpa);
         Dialogs.Show("Whisper Batch", L("about.message", version) + "\n" + engine);
     }
 
@@ -296,7 +301,7 @@ public partial class MainWindow : Window
 
     private void RestorePlacement()
     {
-        if (_settings.Window is not { } w) return;
+        if (_settings.Data.Window is not { } w) return;
         var virtualScreen = new Rect(SystemParameters.VirtualScreenLeft, SystemParameters.VirtualScreenTop, SystemParameters.VirtualScreenWidth, SystemParameters.VirtualScreenHeight);
         var rect = new Rect(w.Left, w.Top, Math.Max(w.Width, MinWidth), Math.Max(w.Height, MinHeight));
         if (virtualScreen.IntersectsWith(rect) && rect.Width <= virtualScreen.Width + 50)
@@ -314,7 +319,7 @@ public partial class MainWindow : Window
     private void SavePlacement()
     {
         var bounds = WindowState == WindowState.Normal ? new Rect(Left, Top, Width, Height) : RestoreBounds;
-        _settings.Window = new AppSettings.WindowPlacement
+        _settings.Data.Window = new AppSettings.WindowPlacement
         {
             Left = bounds.Left,
             Top = bounds.Top,

@@ -29,8 +29,10 @@ public partial class App : Application
         DispatcherUnhandledException += OnUnhandledException;
         base.OnStartup(e);
 
-        var settings = AppSettings.Load();
+        var settings = new SettingsStore();
         var model = new AppModel(settings);
+        // 設定の書体・文字の大きさ・テーマを、最初のウィンドウを開く前に反映する
+        model.Appearance.Apply();
         var window = new MainWindow(model, settings);
         MainWindow = window;
         window.Show();

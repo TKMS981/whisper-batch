@@ -6,7 +6,10 @@ using static WhisperBatch.Core.Loc;
 
 namespace WhisperBatch.App.ViewModels;
 
-/// <summary>モデルの取得状況・ダウンロード・削除を管理する（UI スレッドで使う）</summary>
+/// <summary>
+/// モデルの取得状況・ダウンロード・削除を管理する（UI スレッドで使う）。
+/// Whisper と ReazonSpeech は、どちらもファイルをダウンロードしてこのアプリの保存先に置く。
+/// </summary>
 public sealed class ModelManager : ObservableObject
 {
     public abstract record State
@@ -47,11 +50,11 @@ public sealed class ModelManager : ObservableObject
 
     public string StoragePath => Storage?.DirectoryPath ?? L("models.storageUnavailable");
 
-    public State StateOf(WhisperModel model) => _states.GetValueOrDefault(model.Id) ?? new State.NotInstalled();
+    public State StateOf(SpeechModel model) => _states.GetValueOrDefault(model.Id) ?? new State.NotInstalled();
 
-    public bool IsInstalled(WhisperModel model) => StateOf(model) is State.Installed;
+    public bool IsInstalled(SpeechModel model) => StateOf(model) is State.Installed;
 
-    public string? FilePath(WhisperModel model) => Storage?.FilePath(model);
+    public IReadOnlyList<SpeechModel> InstalledModels(SpeechEngine engine) => ModelCatalog.Models(engine).Where(IsInstalled).ToList();
 
     public bool HasActiveDownloads => _tasks.Count > 0;
 
@@ -69,7 +72,7 @@ public sealed class ModelManager : ObservableObject
         OnChanged();
     }
 
-    public void Download(WhisperModel model)
+    public void Download(SpeechModel model)
     {
         if (Storage is not { } storage || StateOf(model).IsBusy) return;
         var id = model.Id;
@@ -95,7 +98,8 @@ public sealed class ModelManager : ObservableObject
                         if (Interlocked.Exchange(ref lastStep, step) == step) return;
                         dispatcher.BeginInvoke(() =>
                         {
-                            if (_states.GetValueOrDefault(id) is not State.Downloading) return;
+                            // 複数ファイルのモデルは、1 ファイルの検証が終わると次のファイルの取得に戻る
+                            if (_states.GetValueOrDefault(id) is not (State.Downloading or State.Verifying)) return;
                             _states[id] = new State.Downloading(received, total);
                             OnChanged();
                         });
@@ -124,7 +128,7 @@ public sealed class ModelManager : ObservableObject
         }
     }
 
-    public void CancelDownload(WhisperModel model)
+    public void CancelDownload(SpeechModel model)
     {
         if (_tasks.TryGetValue(model.Id, out var cts)) cts.Cancel();
     }
@@ -134,7 +138,7 @@ public sealed class ModelManager : ObservableObject
         foreach (var cts in _tasks.Values) cts.Cancel();
     }
 
-    public void Delete(WhisperModel model)
+    public void Delete(SpeechModel model)
     {
         if (Storage is not { } storage) return;
         CancelDownload(model);

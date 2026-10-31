@@ -11,7 +11,7 @@
     <!-- 数百 MB の CUDA DLL をビルドのたびに複製しない -->
     <CreateHardLinksForCopyFilesToOutputDirectoryIfPossible>true</CreateHardLinksForCopyFilesToOutputDirectoryIfPossible>
     <CreateHardLinksForCopyLocalIfPossible>true</CreateHardLinksForCopyLocalIfPossible>
-    <Version>1.0.0</Version>
+    <Version>1.1.1</Version>
     <Company>TKMS981</Company>
     <Product>Whisper Batch</Product>
     <Copyright>Copyright (c) 2026 TKMS981 — MIT License</Copyright>

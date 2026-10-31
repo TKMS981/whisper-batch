@@ -12,8 +12,8 @@ public static class Dialogs
     public static Window? Owner =>
         Application.Current?.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive) ?? Application.Current?.MainWindow;
 
-    public static void Show(string title, string message, bool error = false) =>
-        Ask(title, message, [L("common.ok")], 0, 0, warning: error);
+    public static void Show(string title, string message, bool error = false, Window? owner = null) =>
+        Ask(title, message, [L("common.ok")], 0, 0, warning: error, owner: owner);
 
     /// <summary>ボタンを並べて選ばせる。押したボタンの番号を返す（閉じた場合は cancelIndex）。</summary>
     public static int Ask(string title, string message, IReadOnlyList<string> buttons, int defaultIndex, int cancelIndex, bool warning = false, Window? owner = null)
@@ -32,6 +32,7 @@ public static class Dialogs
             MaxWidth = 560,
         };
         window.SetResourceReference(Control.FontFamilyProperty, "AppFont");
+        window.SetResourceReference(Control.FontSizeProperty, "Size.14");
 
         var icon = new TextBlock
         {
@@ -44,14 +45,15 @@ public static class Dialogs
         icon.SetResourceReference(TextBlock.ForegroundProperty, warning ? "SystemFillColorCautionBrush" : "AccentTextFillColorPrimaryBrush");
 
         var text = new StackPanel();
-        text.Children.Add(new TextBlock
+        var heading = new TextBlock
         {
             Text = title,
-            FontSize = 16,
             FontWeight = FontWeights.SemiBold,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 8),
-        });
+        };
+        heading.SetResourceReference(TextBlock.FontSizeProperty, "Size.16");
+        text.Children.Add(heading);
         if (!string.IsNullOrEmpty(message))
         {
             var body = new TextBox

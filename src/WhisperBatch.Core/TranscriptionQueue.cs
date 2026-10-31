@@ -15,8 +15,9 @@ public enum ProcessingPhase
 /// <param name="FallbackMessage">WhisperBatchError 以外のエラーの説明（OS が返した文など）</param>
 public sealed record ItemFailure(WhisperBatchError? Error, string FallbackMessage)
 {
-    public static ItemFailure From(Exception error) =>
-        new((error as WhisperBatchException)?.Error, ErrorMessages.UserFacing(error));
+    /// <summary>OS のエラーは <see cref="ErrorMapper"/> で分類し、分類できたものは表示言語の切り替えにも追従させる</summary>
+    public static ItemFailure From(Exception error, ErrorMapper.Operation? operation = null) =>
+        new(ErrorMapper.Map(error, operation), ErrorMessages.UserFacing(error, operation));
 
     public static ItemFailure From(WhisperBatchError error) => new(error, error.Description);
 
@@ -245,6 +246,9 @@ public sealed class TranscriptionQueue
 
     /// <summary>待機中の項目をすべて削除する</summary>
     public int RemoveAllPending() => RemoveWhere(i => i.Status.IsPending);
+
+    /// <summary>完了した項目をすべて削除する（文字起こし結果も消える）</summary>
+    public int RemoveAllCompleted() => RemoveWhere(i => i.Status.IsCompleted);
 
     /// <summary>処理中以外の項目をすべて削除する</summary>
     public int RemoveAllRemovable() => RemoveWhere(i => i.Status.IsRemovable);

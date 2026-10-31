@@ -1,10 +1,10 @@
 ﻿; Whisper Batch の Windows インストーラー（Inno Setup 6）
 ; ビルドは scripts/make-installer.ps1 から行う（アプリのビルドと Visual C++ ランタイムの取得を含む）。
 ;
-;   ISCC.exe /DAppVersion=1.0.0 /DSourceDir=<build\WhisperBatch> /DRedistDir=<build\redist> /DOutputDir=<build\installer> WhisperBatch.iss
+;   ISCC.exe /DAppVersion=1.1.1 /DSourceDir=<build\WhisperBatch> /DRedistDir=<build\redist> /DOutputDir=<build\installer> WhisperBatch.iss
 
 #ifndef AppVersion
-  #define AppVersion "1.0.0"
+  #define AppVersion "1.1.1"
 #endif
 #ifndef SourceDir
   #define SourceDir "..\build\WhisperBatch"
@@ -78,8 +78,8 @@ ja.InstallingVC=Visual C++ ランタイムをインストールしています�
 en.InstallingVC=Installing the Visual C++ Runtime…
 ja.VCFailed=Visual C++ ランタイム（x64）をインストールできませんでした（コード %1）。Microsoft のサイトから「Visual C++ 再頒布可能パッケージ」をインストールしてから Whisper Batch を起動してください。
 en.VCFailed=Could not install the Visual C++ Runtime (x64) (code %1). Please install the "Visual C++ Redistributable" from Microsoft before starting Whisper Batch.
-ja.DeleteModels=ダウンロードした Whisper モデル（%1）も削除しますか？%n%n保存先: %2%n%n残しておくと、再インストールしたときにダウンロードし直す必要がありません。
-en.DeleteModels=Also delete the downloaded Whisper models (%1)?%n%nLocation: %2%n%nIf you keep them, you won't need to download them again after reinstalling.
+ja.DeleteModels=ダウンロードしたモデル（Whisper・ReazonSpeech、%1）も削除しますか？%n%n保存先: %2%n%n残しておくと、再インストールしたときにダウンロードし直す必要がありません。
+en.DeleteModels=Also delete the downloaded models (Whisper and ReazonSpeech, %1)?%n%nLocation: %2%n%nIf you keep them, you won't need to download them again after reinstalling.
 ja.GpuNote=NVIDIA GPU（CUDA 12 対応ドライバー）があれば GPU で処理します。ない場合は CPU で処理します（時間がかかります）。
 en.GpuNote=An NVIDIA GPU (with a CUDA 12 driver) is used when available; otherwise processing runs on the CPU (slower).
 
@@ -189,6 +189,7 @@ begin
   Result := Result + CustomMessage('GpuNote');
 end;
 
+{ フォルダの中のファイルの合計サイズ（ReazonSpeech はモデルごとのサブフォルダに置くので、サブフォルダも数える） }
 function FolderSize(const Dir: String): Int64;
 var
   FindRec: TFindRec;
@@ -198,14 +199,16 @@ begin
   try
     repeat
       if (FindRec.Attributes and FILE_ATTRIBUTE_DIRECTORY) = 0 then
-        Result := Result + (Int64(FindRec.SizeHigh) shl 32) + FindRec.SizeLow;
+        Result := Result + (Int64(FindRec.SizeHigh) shl 32) + FindRec.SizeLow
+      else if (FindRec.Name <> '.') and (FindRec.Name <> '..') then
+        Result := Result + FolderSize(AddBackslash(Dir) + FindRec.Name);
     until not FindNext(FindRec);
   finally
     FindClose(FindRec);
   end;
 end;
 
-{ アンインストール時、ダウンロードしたモデルを消すか確認する。設定ファイルは消す（サイレント時はどちらも残す）。 }
+{ アンインストール時、ダウンロードしたモデルを消すか確認する。設定ファイルと、設定で選んだ背景画像の複製は消す（サイレント時はどれも残す）。 }
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   Models, Question: String;
@@ -221,5 +224,8 @@ begin
       DelTree(ExpandConstant('{localappdata}\WhisperBatch'), True, True, True);
   end;
   if not UninstallSilent then
+  begin
     DelTree(ExpandConstant('{userappdata}\WhisperBatch'), True, True, True);
+    DelTree(ExpandConstant('{localappdata}\WhisperBatch\Background'), True, True, True);
+  end;
 end;

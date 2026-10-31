@@ -2,9 +2,9 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:l="clr-namespace:WhisperBatch.App.Infrastructure">
-    <!-- 右上: モデルと言語の設定、開始・キャンセル -->
+    <!-- 右上: 方式・モデル・言語の設定、開始・キャンセル -->
     <StackPanel>
-        <!-- 幅が狭いときはモデルを 1 行目いっぱいに、言語と開始ボタンを 2 行目に並べる（コードビハインドで切り替え） -->
+        <!-- 1 行目に方式と開始ボタン、2 行目にモデルと言語。幅が狭いときは言語と開始ボタンを 3 行目に並べる（コードビハインドで切り替え） -->
         <Grid x:Name="PickerGrid">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="20*" MaxWidth="600" />
@@ -15,20 +15,31 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
-            <StackPanel x:Name="ModelBox" Grid.Column="0" Margin="0,0,16,0">
+            <!-- 方式（Whisper / ReazonSpeech） -->
+            <StackPanel x:Name="EngineBox" Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="3" Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock Text="{l:L settings.engine}" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                <ListBox Style="{StaticResource Segmented}" ItemsSource="{Binding Model.EngineChoices}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                         SelectedValue="{Binding Model.EngineSelection}" IsEnabled="{Binding Model.IsRunning, Converter={StaticResource Not}}"
+                         ToolTip="{Binding Model.EngineSummary}" ToolTipService.ShowOnDisabled="True"
+                         AutomationProperties.Name="{l:L settings.engine.accessibility}" />
+            </StackPanel>
+            <StackPanel x:Name="ModelBox" Grid.Row="1" Grid.Column="0" Margin="0,10,16,0">
                 <TextBlock Text="{l:L settings.model}" Style="{StaticResource Caption}" Margin="0,0,0,4" />
-                <ComboBox ItemsSource="{Binding Model.ModelChoices}" DisplayMemberPath="Label" SelectedValuePath="Value" HorizontalAlignment="Stretch"
-                          SelectedValue="{Binding Model.SelectedModelId}" IsEnabled="{Binding Model.IsRunning, Converter={StaticResource Not}}"
+                <ComboBox ItemsSource="{Binding Model.ModelChoices}" DisplayMemberPath="Label" HorizontalAlignment="Stretch"
+                          SelectedItem="{Binding Model.SelectedModelChoice}" IsEnabled="{Binding Model.IsRunning, Converter={StaticResource Not}}"
                           AutomationProperties.Name="{l:L settings.model.accessibility}" />
             </StackPanel>
-            <StackPanel x:Name="LanguageBox" Grid.Column="1" Width="180">
+            <StackPanel x:Name="LanguageBox" Grid.Row="1" Grid.Column="1" Width="180" Margin="0,10,0,0">
                 <TextBlock Text="{l:L settings.language}" Style="{StaticResource Caption}" Margin="0,0,0,4" />
+                <!-- ReazonSpeech は日本語専用なので、日本語に固定して表示する -->
                 <ComboBox ItemsSource="{Binding Model.LanguageChoices}" DisplayMemberPath="Label" SelectedValuePath="Value" HorizontalAlignment="Stretch"
-                          SelectedValue="{Binding Model.Language}" IsEnabled="{Binding Model.IsRunning, Converter={StaticResource Not}}"
-                          AutomationProperties.Name="{l:L settings.language.accessibility}" />
+                          SelectedValue="{Binding Model.LanguageSelection}" IsEnabled="{Binding Model.CanChangeLanguage}"
+                          ToolTip="{Binding Model.LanguageHelp}" ToolTipService.ShowOnDisabled="True"
+                          AutomationProperties.Name="{l:L settings.language.accessibility}" AutomationProperties.HelpText="{Binding Model.LanguageHelp}" />
             </StackPanel>
-            <Grid x:Name="RunBox" Grid.Column="3" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="16,0,0,0">
+            <Grid x:Name="RunBox" Grid.Row="0" Grid.Column="3" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="16,0,0,0">
                 <Button Command="{Binding StartCommand}" Style="{DynamicResource AccentButtonStyle}" Padding="16,7" AutomationProperties.Name="{l:L action.start}" ToolTip="{Binding Model.StartHelp}"
                         Visibility="{Binding Model.IsRunning, Converter={StaticResource NotVisible}}">
                     <StackPanel Orientation="Horizontal">
@@ -91,18 +102,18 @@
 
         <!-- 開始できない理由 -->
         <StackPanel Orientation="Horizontal" Margin="0,8,0,0" Visibility="{Binding Model.VisibleBlockReason, Converter={StaticResource NotEmpty}}">
-            <TextBlock Text="&#xE946;" Style="{StaticResource Icon}" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,0,6,0" VerticalAlignment="Top" />
+            <TextBlock Text="&#xE946;" Style="{StaticResource Icon}" FontSize="{DynamicResource Size.12}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,0,6,0" VerticalAlignment="Top" />
             <TextBlock Text="{Binding Model.VisibleBlockReason}" Style="{StaticResource Caption}" MaxWidth="640" />
         </StackPanel>
 
         <!-- プライバシーと処理装置 -->
         <DockPanel Margin="0,8,0,0">
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Margin="12,0,0,0" Visibility="{Binding Model.DeviceLine, Converter={StaticResource NotEmpty}}">
-                <TextBlock Text="&#xE950;" Style="{StaticResource Icon}" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,0,6,0" />
+                <TextBlock Text="&#xE950;" Style="{StaticResource Icon}" FontSize="{DynamicResource Size.12}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,0,6,0" />
                 <TextBlock Text="{Binding Model.DeviceLine}" Style="{StaticResource Caption}" TextWrapping="NoWrap" />
             </StackPanel>
             <StackPanel Orientation="Horizontal">
-                <TextBlock Text="&#xE72E;" Style="{StaticResource Icon}" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,0,6,0" VerticalAlignment="Top" />
+                <TextBlock Text="&#xE72E;" Style="{StaticResource Icon}" FontSize="{DynamicResource Size.12}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,0,6,0" VerticalAlignment="Top" />
                 <TextBlock Text="{l:L settings.privacy}" Style="{StaticResource Caption}" TextTrimming="CharacterEllipsis" MaxHeight="34" />
             </StackPanel>
         </DockPanel>
